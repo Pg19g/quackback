@@ -65,7 +65,7 @@ export const adminQueries = {
         // Deserialize date strings from server response
         return {
           ...data,
-          items: data.items.map((p) => ({
+          items: (data?.items ?? []).map((p) => ({
             ...p,
             createdAt: new Date(p.createdAt),
             updatedAt: new Date(p.updatedAt),
