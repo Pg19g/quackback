@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/shared/form-error'
 import { authClient } from '@/lib/server/auth/client'
+import { setPasswordFn } from '@/lib/server/functions/invitations'
 
 export function PasswordForm() {
   const [hasPassword, setHasPassword] = useState<boolean | null>(null)
@@ -56,13 +57,7 @@ export function PasswordForm() {
         }
         toast.success('Password changed')
       } else {
-        const { error: fetchError } = await authClient.$fetch('/set-password', {
-          method: 'POST',
-          body: { newPassword },
-        })
-        if (fetchError) {
-          throw new Error(fetchError.message || 'Failed to set password')
-        }
+        await setPasswordFn({ data: { newPassword } })
         setHasPassword(true)
         toast.success('Password set')
       }
