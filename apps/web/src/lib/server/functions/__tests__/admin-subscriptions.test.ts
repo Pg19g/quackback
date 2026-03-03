@@ -52,7 +52,7 @@ const mockSelect = vi.fn(() => ({ from: mockFrom }))
 
 vi.mock('@/lib/server/db', () => ({
   db: {
-    select: (...args: unknown[]) => mockSelect(...args),
+    select: () => mockSelect(),
   },
   votes: { id: 'id', postId: 'postId', principalId: 'principalId' },
   eq: vi.fn(),
