@@ -173,10 +173,7 @@ function DuplicateRow({
 
         {/* Right: merged preview card */}
         {preview && (
-          <MergePreviewCard
-            preview={preview}
-            onClick={() => setShowConfirmDialog(true)}
-          />
+          <MergePreviewCard preview={preview} />
         )}
       </div>
 
@@ -291,24 +288,15 @@ function MergedDuplicateRow({
 
 function MergePreviewCard({
   preview,
-  onClick,
 }: {
   preview: ReturnType<typeof computeMergePreview>
-  onClick: () => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="min-w-0 rounded-md border border-dashed border-border/60 bg-muted/20 p-2.5 text-left cursor-pointer transition-colors hover:bg-muted/40 hover:border-border group"
-    >
-      <div className="flex items-center justify-between mb-1.5">
+    <div className="min-w-0 rounded-md border border-dashed border-border/60 bg-muted/20 p-2.5">
+      <div className="mb-1.5">
         <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide">
           Merged result
         </p>
-        <span className="text-[10px] text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity">
-          Review
-        </span>
       </div>
       <div className="flex items-start gap-2.5">
         {/* Vote pill */}
@@ -348,7 +336,7 @@ function MergePreviewCard({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 
