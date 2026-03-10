@@ -13,6 +13,7 @@ import {
   toggleCommentsLockFn,
   deletePostFn,
   restorePostFn,
+  proxyVoteFn,
 } from '@/lib/server/functions/posts'
 import { toggleVoteFn } from '@/lib/server/functions/public-posts'
 import { inboxKeys } from '@/lib/client/hooks/use-inbox-query'
@@ -334,7 +335,7 @@ export function useCreatePost() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreatePostInput) =>
+    mutationFn: (input: CreatePostInput & { authorPrincipalId?: string }) =>
       createPostFn({
         data: {
           title: input.title,
@@ -343,10 +344,38 @@ export function useCreatePost() {
           boardId: input.boardId,
           statusId: input.statusId,
           tagIds: input.tagIds,
+          authorPrincipalId: input.authorPrincipalId,
         },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: inboxKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: roadmapPostsKeys.all })
+    },
+  })
+}
+
+// ============================================================================
+// Proxy Vote Mutation (admin votes on behalf of a user)
+// ============================================================================
+
+export function useProxyVote(postId: PostId) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (voterPrincipalId: PrincipalId) =>
+      proxyVoteFn({ data: { postId, voterPrincipalId } }),
+    onSuccess: (data) => {
+      // Update detail cache vote count
+      queryClient.setQueryData<PostDetails>(inboxKeys.detail(postId), (old) =>
+        old ? { ...old, voteCount: data.voteCount } : old
+      )
+      // Update list caches
+      updatePostInLists(queryClient, postId, (post) => ({
+        ...post,
+        voteCount: data.voteCount,
+      }))
+      // Refresh avatar stack
+      queryClient.invalidateQueries({ queryKey: ['inbox', 'voters', postId] })
     },
   })
 }

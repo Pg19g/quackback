@@ -59,16 +59,20 @@ vi.mock('@/lib/server/db', () => ({
 
 const mockEmbedSignal = vi.fn()
 const mockFindSimilarPosts = vi.fn()
+const mockFindSimilarPendingSuggestions = vi.fn()
 
 vi.mock('../embedding.service', () => ({
   embedSignal: (...args: unknown[]) => mockEmbedSignal(...args),
   findSimilarPosts: (...args: unknown[]) => mockFindSimilarPosts(...args),
+  findSimilarPendingSuggestions: (...args: unknown[]) => mockFindSimilarPendingSuggestions(...args),
 }))
 
 const mockCreatePostSuggestion = vi.fn()
+const mockCreateVoteSuggestion = vi.fn()
 
 vi.mock('../suggestion.service', () => ({
   createPostSuggestion: (...args: unknown[]) => mockCreatePostSuggestion(...args),
+  createVoteSuggestion: (...args: unknown[]) => mockCreateVoteSuggestion(...args),
 }))
 
 vi.mock('../prompts/suggestion.prompt', () => ({
@@ -88,7 +92,19 @@ vi.mock('@/lib/server/domains/ai/config', () => ({
 }))
 
 vi.mock('@/lib/server/domains/ai/retry', () => ({
-  withRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
+  withRetry: vi.fn((fn: () => Promise<unknown>) =>
+    fn().then((result: unknown) => ({ result, retryCount: 0 }))
+  ),
+}))
+
+vi.mock('@/lib/server/domains/ai/usage-log', () => ({
+  withUsageLogging: vi.fn((_params: unknown, fn: () => Promise<{ result: unknown }>) =>
+    fn().then(({ result }) => result)
+  ),
+}))
+
+vi.mock('../pipeline-log', () => ({
+  logPipelineEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
 describe('interpretation.service', () => {
@@ -128,12 +144,23 @@ describe('interpretation.service', () => {
     await interpretSignal(signalId)
 
     // Quackback posts only get embedded — duplicate detection handled by merge_suggestions system
-    expect(mockEmbedSignal).toHaveBeenCalledWith(signalId)
+    expect(mockEmbedSignal).toHaveBeenCalledWith(signalId, rawItemId)
     expect(mockFindSimilarPosts).not.toHaveBeenCalled()
     expect(mockCreatePostSuggestion).not.toHaveBeenCalled()
+
+    // Should log skipped_quackback pipeline event
+    const { logPipelineEvent } = await import('../pipeline-log')
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.skipped_quackback',
+        rawFeedbackItemId: rawItemId,
+        signalId,
+        detail: {},
+      })
+    )
   })
 
-  it('should not create suggestion for external source with similar match', async () => {
+  it('should create vote_on_post suggestion for external source with high-similarity match', async () => {
     mockSignalFindFirst.mockResolvedValueOnce(baseSignal)
     mockEmbedSignal.mockResolvedValueOnce(mockEmbedding)
     mockRawItemFindFirst.mockResolvedValueOnce({
@@ -151,12 +178,72 @@ describe('interpretation.service', () => {
         similarity: 0.85,
       },
     ])
+
+    // Mock LLM for suggestion generation (vote suggestions also generate title/body)
+    mockOpenAI.chat.completions.create.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              title: 'Add CSV Export',
+              body: 'Users need CSV export',
+              boardId: 'board_1',
+              reasoning: 'Feature request',
+            }),
+          },
+        },
+      ],
+    })
+
     mockSignalFindMany.mockResolvedValueOnce([{ id: signalId, processingState: 'completed' }])
 
     const { interpretSignal } = await import('../interpretation.service')
     await interpretSignal(signalId)
 
     expect(mockCreatePostSuggestion).not.toHaveBeenCalled()
+    expect(mockCreateVoteSuggestion).toHaveBeenCalledTimes(1)
+    expect(mockCreateVoteSuggestion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resultPostId: 'post_target',
+        similarPosts: expect.arrayContaining([
+          expect.objectContaining({ postId: 'post_target', similarity: 0.85 }),
+        ]),
+      })
+    )
+
+    // Verify pipeline logging
+    const { logPipelineEvent } = await import('../pipeline-log')
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.similar_posts',
+        detail: expect.objectContaining({
+          bestSimilarity: 0.85,
+          threshold: 0.8,
+        }),
+      })
+    )
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.suggestion_created',
+        detail: expect.objectContaining({
+          suggestionType: 'vote_on_post',
+          sourceType: 'intercom',
+        }),
+      })
+    )
+
+    // Verify AI usage logging for suggestion generation
+    const { withUsageLogging } = await import('@/lib/server/domains/ai/usage-log')
+    expect(withUsageLogging).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipelineStep: 'suggestion',
+        rawFeedbackItemId: rawItemId,
+        signalId,
+        metadata: expect.objectContaining({ suggestionType: 'vote_on_post' }),
+      }),
+      expect.any(Function),
+      expect.any(Function)
+    )
   })
 
   it('should create post suggestion for external source with no match', async () => {
@@ -168,6 +255,7 @@ describe('interpretation.service', () => {
       content: { subject: 'CSV', text: 'We need CSV export' },
     })
     mockFindSimilarPosts.mockResolvedValueOnce([])
+    mockFindSimilarPendingSuggestions.mockResolvedValueOnce([])
 
     // Mock LLM for suggestion generation
     mockOpenAI.chat.completions.create.mockResolvedValueOnce({
@@ -196,6 +284,28 @@ describe('interpretation.service', () => {
         suggestedTitle: 'Add CSV Export',
       })
     )
+
+    // Should log similar_posts and suggestion_created events
+    const { logPipelineEvent } = await import('../pipeline-log')
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.similar_posts',
+        detail: expect.objectContaining({
+          postMatches: [],
+          bestSimilarity: null,
+        }),
+      })
+    )
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.suggestion_created',
+        detail: expect.objectContaining({
+          suggestionType: 'create_post',
+          sourceType: 'intercom',
+          usedFallback: false,
+        }),
+      })
+    )
   })
 
   it('should use fallback when LLM fails for create_post suggestion', async () => {
@@ -207,6 +317,7 @@ describe('interpretation.service', () => {
       content: { subject: 'CSV', text: 'We need CSV' },
     })
     mockFindSimilarPosts.mockResolvedValueOnce([])
+    mockFindSimilarPendingSuggestions.mockResolvedValueOnce([])
     mockOpenAI.chat.completions.create.mockRejectedValueOnce(new Error('API down'))
     mockSignalFindMany.mockResolvedValueOnce([{ id: signalId, processingState: 'completed' }])
 
@@ -218,6 +329,17 @@ describe('interpretation.service', () => {
     expect(mockCreatePostSuggestion).toHaveBeenCalledWith(
       expect.objectContaining({
         suggestedTitle: expect.stringContaining('CSV export needed'),
+      })
+    )
+
+    // Should log suggestion_created with usedFallback=true
+    const { logPipelineEvent } = await import('../pipeline-log')
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.suggestion_created',
+        detail: expect.objectContaining({
+          usedFallback: true,
+        }),
       })
     )
   })
@@ -284,6 +406,57 @@ describe('interpretation.service', () => {
     expect(failedUpdate).toBeDefined()
   })
 
+  it('should skip creating suggestion when similar pending suggestion exists', async () => {
+    mockSignalFindFirst.mockResolvedValueOnce(baseSignal)
+    mockEmbedSignal.mockResolvedValueOnce(mockEmbedding)
+    mockRawItemFindFirst.mockResolvedValueOnce({
+      sourceType: 'intercom',
+      externalId: 'conv_789',
+      content: { subject: 'CSV', text: 'We need CSV export' },
+    })
+    mockFindSimilarPosts.mockResolvedValueOnce([]) // no matching posts
+    mockFindSimilarPendingSuggestions.mockResolvedValueOnce([
+      {
+        id: 'existing_suggestion_1',
+        rawFeedbackItemId: 'other_raw_item',
+        suggestedTitle: 'Add CSV Export',
+        boardId: 'board_1',
+        similarity: 0.92,
+      },
+    ])
+    mockSignalFindMany.mockResolvedValueOnce([{ id: signalId, processingState: 'completed' }])
+
+    const { interpretSignal } = await import('../interpretation.service')
+    await interpretSignal(signalId)
+
+    // Should NOT create any suggestion — the existing pending one covers this need
+    expect(mockCreatePostSuggestion).not.toHaveBeenCalled()
+    expect(mockCreateVoteSuggestion).not.toHaveBeenCalled()
+
+    // Should still check pending suggestions with the right params
+    expect(mockFindSimilarPendingSuggestions).toHaveBeenCalledWith(
+      mockEmbedding,
+      expect.objectContaining({
+        limit: 1,
+        minSimilarity: 0.8,
+        excludeRawItemId: rawItemId,
+      })
+    )
+
+    // Should log suggestion_skipped pipeline event
+    const { logPipelineEvent } = await import('../pipeline-log')
+    expect(logPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'interpretation.suggestion_skipped',
+        detail: expect.objectContaining({
+          reason: 'duplicate_pending',
+          similarSuggestionId: 'existing_suggestion_1',
+          similarity: 0.92,
+        }),
+      })
+    )
+  })
+
   it('should use signal embedding for external source similarity search', async () => {
     mockSignalFindFirst.mockResolvedValueOnce(baseSignal)
     mockEmbedSignal.mockResolvedValueOnce(mockEmbedding)
@@ -293,6 +466,7 @@ describe('interpretation.service', () => {
       content: { subject: 'CSV', text: 'We need CSV export' },
     })
     mockFindSimilarPosts.mockResolvedValueOnce([])
+    mockFindSimilarPendingSuggestions.mockResolvedValueOnce([])
 
     // Mock LLM for suggestion generation
     mockOpenAI.chat.completions.create.mockResolvedValueOnce({
@@ -315,10 +489,10 @@ describe('interpretation.service', () => {
     const { interpretSignal } = await import('../interpretation.service')
     await interpretSignal(signalId)
 
-    // findSimilarPosts should be called with the signal embedding
+    // findSimilarPosts should be called with the signal embedding and lowered threshold
     expect(mockFindSimilarPosts).toHaveBeenCalledWith(
       mockEmbedding,
-      expect.objectContaining({ minSimilarity: 0.8 })
+      expect.objectContaining({ minSimilarity: 0.55 })
     )
   })
 })
