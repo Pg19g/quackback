@@ -131,6 +131,7 @@ export async function createPost(
       contentJson: input.contentJson ?? plainTextToTipTap(content),
       statusId,
       principalId: author.principalId,
+      widgetMetadata: input.widgetMetadata ?? null,
     })
     .returning()
 

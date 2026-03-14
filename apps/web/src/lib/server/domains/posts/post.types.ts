@@ -16,6 +16,7 @@ export interface CreatePostInput {
   contentJson?: TiptapContent | null
   statusId?: StatusId
   tagIds?: TagId[]
+  widgetMetadata?: Record<string, string>
 }
 
 /**

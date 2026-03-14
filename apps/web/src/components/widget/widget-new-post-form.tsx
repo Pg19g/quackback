@@ -32,7 +32,7 @@ export function WidgetNewPostForm({
   onSuccess,
   anonymousPostingEnabled = false,
 }: WidgetNewPostFormProps) {
-  const { isIdentified, user } = useWidgetAuth()
+  const { isIdentified, user, emitEvent, metadata } = useWidgetAuth()
   const canPost = isIdentified || anonymousPostingEnabled
 
   const defaultBoard = selectedBoardSlug
@@ -61,12 +61,25 @@ export function WidgetNewPostForm({
   }, [prefilledTitle])
 
   if (!canPost) {
+    const boardSlug = selectedBoardSlug || defaultBoard?.slug || boards[0]?.slug
+    const portalUrl = boardSlug
+      ? `${window.location.origin}/b/${boardSlug}`
+      : window.location.origin
+
+    function handleOpenPortal() {
+      window.parent.postMessage({ type: 'quackback:navigate', url: portalUrl }, '*')
+    }
+
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-        <p className="text-sm font-medium text-foreground">Sign in to submit your idea</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Authentication is required to create posts
-        </p>
+        <p className="text-sm font-medium text-foreground">Want to share an idea?</p>
+        <button
+          type="button"
+          onClick={handleOpenPortal}
+          className="text-xs text-primary hover:text-primary/80 transition-colors mt-1"
+        >
+          Log in to submit your feedback
+        </button>
       </div>
     )
   }
@@ -82,8 +95,20 @@ export function WidgetNewPostForm({
       const { getWidgetAuthHeaders } = await import('@/lib/client/widget-auth')
       const { createPublicPostFn } = await import('@/lib/server/functions/public-posts')
       const result = await createPublicPostFn({
-        data: { boardId, title: title.trim(), content: content.trim() },
+        data: {
+          boardId,
+          title: title.trim(),
+          content: content.trim(),
+          metadata: metadata ?? undefined,
+        },
         headers: getWidgetAuthHeaders(),
+      })
+
+      emitEvent('post:created', {
+        id: result.id,
+        title: result.title,
+        board: result.board,
+        statusId: result.statusId ?? null,
       })
 
       onSuccess({

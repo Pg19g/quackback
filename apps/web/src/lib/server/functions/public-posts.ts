@@ -81,6 +81,7 @@ const createPublicPostSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   content: z.string().max(10000).optional().default(''),
   contentJson: tiptapContentSchema.optional(),
+  metadata: z.record(z.string(), z.string()).optional(),
 })
 
 const getPublicRoadmapPostsSchema = z.object({
@@ -293,8 +294,15 @@ export const toggleVoteFn = createServerFn({ method: 'POST' })
       try {
         const ctx = await requireAuth()
 
-        // Rate limit anonymous voters by IP
+        // Block anonymous users unless anonymousVoting is enabled
         if (ctx.principal.type === 'anonymous') {
+          const { getPortalConfig } = await import('@/lib/server/domains/settings/settings.service')
+          const config = await getPortalConfig()
+          if (!config.features.anonymousVoting) {
+            throw new Error('Anonymous voting is not enabled')
+          }
+
+          // Rate limit anonymous voters by IP
           const headers = getRequestHeaders()
           const ip =
             headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -326,7 +334,7 @@ export const createPublicPostFn = createServerFn({ method: 'POST' })
     console.log(`[fn:public-posts] createPublicPostFn: boardId=${data.boardId}`)
     try {
       const ctx = await requireAuth()
-      const { boardId: boardIdRaw, title, content, contentJson } = data
+      const { boardId: boardIdRaw, title, content, contentJson, metadata } = data
       const boardId = boardIdRaw as BoardId
 
       // Run all independent lookups in parallel (board, principal, defaultStatus, settings)
@@ -341,18 +349,16 @@ export const createPublicPostFn = createServerFn({ method: 'POST' })
       if (!board || !board.isPublic) {
         throw new Error('Board not found')
       }
-      if (!principalRecord) {
-        // Anonymous users may not have a member record from getMemberByUser,
-        // but they do have a principal record. Check if anonymous posting is enabled.
-        if (ctx.principal.type === 'anonymous') {
-          const { getPortalConfig } = await import('@/lib/server/domains/settings/settings.service')
-          const config = await getPortalConfig()
-          if (!config.features.anonymousPosting) {
-            throw new Error('Anonymous posting is not enabled')
-          }
-        } else {
-          throw new Error('You must be a member to submit feedback.')
+
+      // Block anonymous users unless anonymousPosting is enabled
+      if (ctx.principal.type === 'anonymous') {
+        const { getPortalConfig } = await import('@/lib/server/domains/settings/settings.service')
+        const config = await getPortalConfig()
+        if (!config.features.anonymousPosting) {
+          throw new Error('Anonymous posting is not enabled')
         }
+      } else if (!principalRecord) {
+        throw new Error('You must be a member to submit feedback.')
       }
       if (!settings) {
         throw new Error('Organization settings not found')
@@ -374,6 +380,7 @@ export const createPublicPostFn = createServerFn({ method: 'POST' })
           content,
           contentJson: contentJson ? sanitizeTiptapContent(contentJson) : undefined,
           statusId: defaultStatus?.id,
+          widgetMetadata: metadata,
         },
         author
       )

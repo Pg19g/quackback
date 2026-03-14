@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { CheckCircleIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/solid'
 import { WidgetVoteButton } from '@/components/widget/widget-vote-button'
 import type { PostId } from '@quackback/ids'
@@ -75,6 +75,7 @@ interface SuccessPost {
 function WidgetPage() {
   const { posts, statuses, boards, defaultBoard, orgSlug, features } = Route.useLoaderData()
   const { isIdentified, closeWidget, ensureSession } = useWidgetAuth()
+  const canVote = isIdentified || features.anonymousVoting
 
   const [view, setView] = useState<WidgetView>('home')
   const [searchQuery, setSearchQuery] = useState('')
@@ -82,6 +83,24 @@ function WidgetPage() {
   const [prefilledTitle, setPrefilledTitle] = useState('')
   const [successPost, setSuccessPost] = useState<SuccessPost | null>(null)
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+
+  // Listen for quackback:open messages from the SDK
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.source !== window.parent) return
+      const msg = event.data
+      if (!msg || typeof msg !== 'object' || msg.type !== 'quackback:open' || !msg.data) return
+
+      const opts = msg.data as { view?: string; title?: string; board?: string }
+      if (opts.view === 'new-post') {
+        if (opts.title) setPrefilledTitle(opts.title)
+        if (opts.board) setSelectedBoardSlug(opts.board)
+        setView('new-post')
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
 
   const canPost = isIdentified || features.anonymousPosting
   const handleSubmitNew = useCallback(
@@ -188,7 +207,15 @@ function WidgetPage() {
                     <WidgetVoteButton
                       postId={successPost.id as PostId}
                       voteCount={successPost.voteCount}
-                      onBeforeVote={features.anonymousVoting ? ensureSession : undefined}
+                      onBeforeVote={canVote ? ensureSession : undefined}
+                      onAuthRequired={
+                        !canVote
+                          ? () => {
+                              const url = `${window.location.origin}/b/${successPost.board.slug}/posts/${successPost.id}`
+                              window.parent.postMessage({ type: 'quackback:navigate', url }, '*')
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                   <div className="flex-1 min-w-0">

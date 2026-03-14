@@ -57,6 +57,9 @@ export interface TiptapContent {
   attrs?: Record<string, string | number | boolean | null>
 }
 
+/** Key-value metadata attached by the widget SDK to posts created through the widget. */
+export type WidgetMetadata = Record<string, string>
+
 // Raw feedback JSONB column types
 export interface RawFeedbackAuthor {
   name?: string

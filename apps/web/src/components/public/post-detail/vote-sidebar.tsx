@@ -28,12 +28,7 @@ export function VoteSidebar({ postId, voteCount, disabled }: VoteSidebarProps): 
 
   return (
     <div className={`${SIDEBAR_CLASS} animate-in fade-in duration-200 fill-mode-backwards`}>
-      <AuthVoteButton
-        postId={postId}
-        voteCount={voteCount}
-        disabled={disabled || !canVote}
-        canVote={!disabled && canVote}
-      />
+      <AuthVoteButton postId={postId} voteCount={voteCount} disabled={disabled} canVote={canVote} />
     </div>
   )
 }

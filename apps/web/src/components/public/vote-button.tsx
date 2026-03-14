@@ -7,8 +7,9 @@ import type { PostId } from '@quackback/ids'
 interface VoteButtonProps {
   postId: PostId
   voteCount: number
+  /** Structurally disabled (e.g. merged post) — visually dimmed, no interaction */
   disabled?: boolean
-  /** Called when user tries to vote but isn't authenticated */
+  /** Called when unauthenticated user clicks — button looks normal, clicking triggers this */
   onAuthRequired?: () => void
   /** Async callback before voting (e.g. anonymous sign-in). Return false to cancel. */
   onBeforeVote?: () => Promise<boolean>
@@ -40,8 +41,9 @@ export function VoteButton({
   const isHandlingRef = useRef(false)
 
   async function handleClick(): Promise<void> {
-    if (disabled) {
-      onAuthRequired?.()
+    if (disabled) return
+    if (onAuthRequired) {
+      onAuthRequired()
       return
     }
     if (isHandlingRef.current) return
@@ -57,6 +59,8 @@ export function VoteButton({
     handleVote()
   }
 
+  const isInteractive = !readonly && !disabled
+
   const sharedClassName = cn(
     'relative flex items-center justify-center',
     'border rounded-md',
@@ -66,23 +70,23 @@ export function VoteButton({
         ? 'flex-col self-stretch px-3.5 py-1.5 gap-1'
         : 'flex-col w-12 py-2 gap-0.5',
     'bg-muted/40 text-muted-foreground',
-    !readonly && 'group transition-colors duration-200 cursor-pointer',
-    !readonly &&
+    isInteractive && 'group transition-colors duration-200 cursor-pointer',
+    isInteractive &&
       (hasVoted
         ? 'border-post-card-voted/60 bg-post-card-voted/15 text-post-card-voted'
         : 'border-border/50 hover:border-border hover:bg-muted/60 hover:text-foreground/80'),
-    readonly && 'border-border/50',
-    !readonly && isPending && 'opacity-70 cursor-wait',
-    !readonly && disabled && 'cursor-not-allowed opacity-50'
+    (readonly || disabled) && 'border-border/50',
+    isInteractive && isPending && 'opacity-70 cursor-wait',
+    disabled && 'cursor-not-allowed opacity-50'
   )
 
   const chevron = (
     <ChevronUpIcon
       className={cn(
         compact || pill ? 'h-3.5 w-3.5' : 'h-4 w-4',
-        !readonly && 'transition-transform duration-200',
-        !readonly && hasVoted && 'fill-post-card-voted',
-        !readonly && !isPending && !disabled && 'group-hover:-translate-y-0.5'
+        isInteractive && 'transition-transform duration-200',
+        isInteractive && hasVoted && 'fill-post-card-voted',
+        isInteractive && !isPending && 'group-hover:-translate-y-0.5'
       )}
     />
   )
@@ -93,7 +97,7 @@ export function VoteButton({
       className={cn(
         'font-semibold tabular-nums',
         compact || pill ? 'text-xs' : 'text-sm',
-        !readonly && hasVoted ? 'text-post-card-voted' : 'text-foreground'
+        isInteractive && hasVoted ? 'text-post-card-voted' : 'text-foreground'
       )}
     >
       {displayCount}

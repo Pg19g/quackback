@@ -84,6 +84,8 @@ export const posts = pgTable(
     })
       .default('published')
       .notNull(),
+    // Key-value metadata attached by the widget SDK
+    widgetMetadata: jsonb('widget_metadata').$type<Record<string, string>>(),
     // Merge/deduplication: points to the canonical post this was merged into
     canonicalPostId: typeIdColumnNullable('post')('canonical_post_id'),
     mergedAt: timestamp('merged_at', { withTimezone: true }),

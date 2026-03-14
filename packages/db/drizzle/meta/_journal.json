@@ -246,6 +246,13 @@
       "when": 1773407236622,
       "tag": "0034_petite_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1773488401446,
+      "tag": "0035_cute_bucky",
+      "breakpoints": true
     }
   ]
 }

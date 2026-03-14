@@ -82,6 +82,14 @@ export function useWidgetVote({ postId, voteCount, enabled = true }: UseWidgetVo
         else next.delete(id)
         return next
       })
+      window.parent.postMessage(
+        {
+          type: 'quackback:event',
+          name: 'vote',
+          payload: { postId: id, voted: data.voted, voteCount: data.voteCount },
+        },
+        '*'
+      )
     },
   })
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MagnifyingGlassIcon, Squares2X2Icon, XMarkIcon } from '@heroicons/react/24/solid'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/shared/utils'
@@ -62,8 +62,17 @@ export function WidgetHome({
   onPostSelect,
   anonymousVotingEnabled = true,
 }: WidgetHomeProps) {
-  const { closeWidget, ensureSession } = useWidgetAuth()
+  const { closeWidget, ensureSession, isIdentified } = useWidgetAuth()
   const inputRef = useRef<HTMLInputElement>(null)
+  const canVote = isIdentified || anonymousVotingEnabled
+
+  const openPostOnPortal = useCallback((post: WidgetPost) => {
+    const slug = post.board?.slug
+    const url = slug
+      ? `${window.location.origin}/b/${slug}/posts/${post.id}`
+      : `${window.location.origin}`
+    window.parent.postMessage({ type: 'quackback:navigate', url }, '*')
+  }, [])
 
   // Search state
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null)
@@ -275,7 +284,8 @@ export function WidgetHome({
                     <WidgetVoteButton
                       postId={post.id as PostId}
                       voteCount={post.voteCount}
-                      onBeforeVote={anonymousVotingEnabled ? ensureSession : undefined}
+                      onBeforeVote={canVote ? ensureSession : undefined}
+                      onAuthRequired={!canVote ? () => openPostOnPortal(post) : undefined}
                     />
                   </div>
 

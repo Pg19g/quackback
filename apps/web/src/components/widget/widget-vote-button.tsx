@@ -11,6 +11,8 @@ interface WidgetVoteButtonProps {
   voteCount: number
   /** Async callback before voting (e.g. anonymous sign-in). Return false to cancel. */
   onBeforeVote?: () => Promise<boolean>
+  /** Called when an unauthenticated user clicks to vote (e.g. open portal). */
+  onAuthRequired?: () => void
   /** Compact horizontal variant */
   compact?: boolean
 }
@@ -19,6 +21,7 @@ export function WidgetVoteButton({
   postId,
   voteCount: initialVoteCount,
   onBeforeVote,
+  onAuthRequired,
   compact = false,
 }: WidgetVoteButtonProps) {
   const { voteCount, hasVoted, isPending, handleVote } = useWidgetVote({
@@ -29,6 +32,10 @@ export function WidgetVoteButton({
   const isHandlingRef = useRef(false)
 
   const handleClick = useCallback(async () => {
+    if (onAuthRequired) {
+      onAuthRequired()
+      return
+    }
     if (isHandlingRef.current || isPending) return
     if (onBeforeVote) {
       isHandlingRef.current = true
@@ -40,7 +47,7 @@ export function WidgetVoteButton({
       }
     }
     handleVote()
-  }, [onBeforeVote, isPending, handleVote])
+  }, [onAuthRequired, onBeforeVote, isPending, handleVote])
 
   return (
     <button

@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { setWidgetToken, clearWidgetToken } from '@/lib/client/widget-auth'
 import { authClient } from '@/lib/server/auth/client'
+import type { WidgetMetadata, WidgetEventName, WidgetEventMap } from '@/lib/shared/widget/types'
 
 interface WidgetUser {
   id: string
@@ -25,6 +26,10 @@ interface WidgetAuthContextValue {
   /** Ensures a session exists (identified or anonymous). Returns true if ready. */
   ensureSession: () => Promise<boolean>
   closeWidget: () => void
+  /** Emit an event to the parent SDK via postMessage */
+  emitEvent: <T extends WidgetEventName>(name: T, payload: WidgetEventMap[T]) => void
+  /** Session metadata set by the host app */
+  metadata: WidgetMetadata | null
 }
 
 const WidgetAuthContext = createContext<WidgetAuthContextValue | null>(null)
@@ -79,6 +84,15 @@ export function WidgetAuthProvider({ children }: { children: ReactNode }) {
   const closeWidget = useCallback(() => {
     window.parent.postMessage({ type: 'quackback:close' }, '*')
   }, [])
+
+  const emitEvent = useCallback(
+    <T extends WidgetEventName>(name: T, payload: WidgetEventMap[T]) => {
+      window.parent.postMessage({ type: 'quackback:event', name, payload }, '*')
+    },
+    []
+  )
+
+  const [widgetMetadata, setWidgetMetadata] = useState<WidgetMetadata | null>(null)
 
   useEffect(() => {
     async function handleIdentify(data: Record<string, unknown>) {
@@ -156,6 +170,11 @@ export function WidgetAuthProvider({ children }: { children: ReactNode }) {
       const msg = event.data
       if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return
 
+      if (msg.type === 'quackback:metadata' && msg.data && typeof msg.data === 'object') {
+        setWidgetMetadata(msg.data as WidgetMetadata)
+        return
+      }
+
       if (msg.type === 'quackback:identify') {
         if (msg.data === null) {
           clearWidgetToken()
@@ -182,7 +201,16 @@ export function WidgetAuthProvider({ children }: { children: ReactNode }) {
   }, [storeToken])
 
   return (
-    <WidgetAuthContext.Provider value={{ user, isIdentified, ensureSession, closeWidget }}>
+    <WidgetAuthContext.Provider
+      value={{
+        user,
+        isIdentified,
+        ensureSession,
+        closeWidget,
+        emitEvent,
+        metadata: widgetMetadata,
+      }}
+    >
       {children}
     </WidgetAuthContext.Provider>
   )

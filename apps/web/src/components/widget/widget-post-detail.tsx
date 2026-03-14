@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatBubbleLeftIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/solid'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { TimeAgo } from '@/components/ui/time-ago'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { PostContent } from '@/components/public/post-content'
 import { portalDetailQueries } from '@/lib/client/queries/portal-detail'
@@ -32,7 +34,7 @@ export function WidgetPostDetail({
   anonymousVotingEnabled = true,
   anonymousCommentingEnabled = false,
 }: WidgetPostDetailProps) {
-  const { isIdentified, user, ensureSession } = useWidgetAuth()
+  const { isIdentified, user, ensureSession, emitEvent } = useWidgetAuth()
   const queryClient = useQueryClient()
 
   // Comment state (root-level comment form only; replies are inline in the comment list)
@@ -66,13 +68,18 @@ export function WidgetPostDetail({
         if (!ok) return
       }
 
-      await createCommentFn({
+      const result = await createCommentFn({
         data: {
           postId,
           content,
           parentId,
         },
         headers: getWidgetAuthHeaders(),
+      })
+      emitEvent('comment:created', {
+        postId,
+        commentId: result.comment.id,
+        parentId: parentId ?? null,
       })
       queryClient.invalidateQueries({ queryKey: ['portal', 'post', postId] })
     },
@@ -104,9 +111,17 @@ export function WidgetPostDetail({
     [submitComment]
   )
 
-  // Identified users can always comment; anonymous users only if the setting is enabled
-  // and they have a session (ensureSession is called before submitting)
+  // Identified users can always vote/comment; anonymous users only if the setting is enabled
+  const canVote = isIdentified || anonymousVotingEnabled
   const canComment = isIdentified || anonymousCommentingEnabled
+
+  // Scroll to top when post data loads or postId changes
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!post) return
+    const viewport = scrollAreaRef.current?.querySelector('[data-slot="scroll-area-viewport"]')
+    if (viewport) viewport.scrollTop = 0
+  }, [post, postId])
 
   const liveCommentCount = post?.comments ? countLiveComments(post.comments) : 0
 
@@ -139,23 +154,20 @@ export function WidgetPostDetail({
   }
 
   return (
-    <ScrollArea className="flex-1 h-full">
+    <ScrollArea ref={scrollAreaRef} className="flex-1 h-full">
       <div className="px-3 pt-3 pb-4 space-y-3">
-        {/* Header: title + meta */}
+        {/* Header: status, title, meta */}
         <div>
+          {status && (
+            <StatusBadge name={status.name} color={status.color} className="text-[10px] mb-1.5" />
+          )}
           <h2 className="text-sm font-semibold text-foreground leading-snug">{post.title}</h2>
-          <div className="flex items-center gap-1.5 mt-1">
-            {status && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                <span
-                  className="size-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: status.color }}
-                />
-                {status.name}
-              </span>
-            )}
-            <span className="text-[10px] text-muted-foreground/50">&middot;</span>
-            <span className="text-[10px] text-muted-foreground/60">{post.board.name}</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60 mt-1.5">
+            <span>{post.authorName || 'Anonymous'}</span>
+            <span className="text-muted-foreground/30">&middot;</span>
+            <TimeAgo date={post.createdAt} />
+            <span className="text-muted-foreground/30">&middot;</span>
+            <span>{post.board.name}</span>
           </div>
         </div>
 
@@ -164,7 +176,8 @@ export function WidgetPostDetail({
           <WidgetVoteButton
             postId={postId as PostId}
             voteCount={post.voteCount}
-            onBeforeVote={anonymousVotingEnabled ? ensureSession : undefined}
+            onBeforeVote={canVote ? ensureSession : undefined}
+            onAuthRequired={!canVote ? handleViewOnPortal : undefined}
             compact
           />
           <button
@@ -243,7 +256,13 @@ export function WidgetPostDetail({
           )}
 
           {!canComment && !post.isCommentsLocked && (
-            <p className="text-[10px] text-muted-foreground/50 mb-3">Sign in to leave a comment</p>
+            <button
+              type="button"
+              onClick={handleViewOnPortal}
+              className="text-[10px] text-primary hover:text-primary/80 transition-colors mb-3"
+            >
+              Log in to join the conversation
+            </button>
           )}
 
           {post.isCommentsLocked && (

@@ -47,7 +47,22 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
   var isReady = false;
   var isIdentified = false;
   var pendingIdentify = null;
+  var metadata = null;
+  var listeners = {};
+  var pendingOpen = null;
   var isMobile = window.innerWidth < 640;
+
+  // =========================================================================
+  // Event System
+  // =========================================================================
+
+  function emit(name, payload) {
+    var fns = listeners[name];
+    if (!fns) return;
+    for (var i = 0; i < fns.length; i++) {
+      try { fns[i](payload); } catch(e) {}
+    }
+  }
 
   // =========================================================================
   // DOM Helpers
@@ -238,13 +253,15 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
       panel.style.opacity = "1";
       panel.style.transform = "scale(1)";
     }
+
+    emit("open", {});
   }
 
   function hidePanel() {
     if (!isOpen) return;
     isOpen = false;
 
-    if (trigger && isIdentified) {
+    if (trigger && isIdentified && !(config && config.trigger === false)) {
       trigger.style.display = "flex";
       trigger.setAttribute("aria-expanded", "false");
     }
@@ -258,6 +275,8 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
       panel.style.transform = "scale(0.95)";
       setTimeout(function() { if (!isOpen && panel) panel.style.display = "none"; }, 200);
     }
+
+    emit("close", {});
   }
 
   // =========================================================================
@@ -284,6 +303,12 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
           sendToWidget("quackback:identify", pendingIdentify);
           pendingIdentify = null;
         }
+        if (metadata) sendToWidget("quackback:metadata", metadata);
+        if (pendingOpen) {
+          sendToWidget("quackback:open", pendingOpen);
+          pendingOpen = null;
+        }
+        emit("ready", {});
         break;
 
       case "quackback:close":
@@ -291,7 +316,16 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
         break;
 
       case "quackback:identify-result":
-        // Could dispatch to callbacks, but for v1 just log
+        emit("identify", {
+          success: msg.success,
+          user: msg.user || null,
+          anonymous: msg.success && !msg.user,
+          error: msg.error,
+        });
+        break;
+
+      case "quackback:event":
+        if (msg.name) emit(msg.name, msg.payload || {});
         break;
 
       case "quackback:navigate":
@@ -304,7 +338,7 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
   // Command Dispatcher
   // =========================================================================
 
-  function dispatch(command, options) {
+  function dispatch(command, options, extra) {
     switch (command) {
       case "init":
         config = options || {};
@@ -323,8 +357,10 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
           // Show trigger on first identify
           if (!isIdentified) {
             isIdentified = true;
-            if (!trigger) createTrigger();
-            else trigger.style.display = "flex";
+            if (!(config && config.trigger === false)) {
+              if (!trigger) createTrigger();
+              else trigger.style.display = "flex";
+            }
           }
           if (isReady) sendToWidget("quackback:identify", options);
           else pendingIdentify = options;
@@ -332,11 +368,48 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
         break;
 
       case "open":
+        if (options && typeof options === "object") {
+          if (isReady) sendToWidget("quackback:open", options);
+          else pendingOpen = options;
+        }
         showPanel();
         break;
 
       case "close":
         hidePanel();
+        break;
+
+      case "on":
+        var onName = options;
+        var onHandler = extra;
+        if (typeof onName === "string" && typeof onHandler === "function") {
+          if (!listeners[onName]) listeners[onName] = [];
+          listeners[onName].push(onHandler);
+          return function() {
+            listeners[onName] = listeners[onName].filter(function(h) { return h !== onHandler; });
+          };
+        }
+        break;
+
+      case "off":
+        var offName = options;
+        var offHandler = extra;
+        if (offHandler) {
+          listeners[offName] = (listeners[offName] || []).filter(function(h) { return h !== offHandler; });
+        } else {
+          delete listeners[offName];
+        }
+        break;
+
+      case "metadata":
+        if (options && typeof options === "object") {
+          if (!metadata) metadata = {};
+          for (var k in options) {
+            if (options[k] === null) delete metadata[k];
+            else metadata[k] = String(options[k]);
+          }
+          if (isReady) sendToWidget("quackback:metadata", metadata);
+        }
         break;
 
       case "destroy":
@@ -349,9 +422,11 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
         trigger = null;
         backdrop = null;
         config = null;
+        metadata = null;
         isOpen = false;
         isReady = false;
         isIdentified = false;
+        pendingOpen = null;
         break;
     }
   }
@@ -364,7 +439,7 @@ export function buildWidgetSDK(baseUrl: string, theme?: WidgetTheme): string {
 
   window.Quackback = function() {
     var args = Array.prototype.slice.call(arguments);
-    dispatch(args[0], args[1]);
+    return dispatch(args[0], args[1], args[2]);
   };
 
   // Replay queued commands
