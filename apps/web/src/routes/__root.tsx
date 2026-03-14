@@ -15,6 +15,7 @@ import { getBootstrapData, type BootstrapData } from '@/lib/server/functions/boo
 import type { TenantSettings } from '@/lib/server/domains/settings'
 import { ThemeProvider } from '@/components/theme-provider'
 import { DefaultErrorPage } from '@/components/shared/error-page'
+import { OttHandler } from '@/components/shared/ott-handler'
 
 // Lazy load devtools in development only
 const TanStackRouterDevtools = import.meta.env.DEV
@@ -152,6 +153,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootComponent() {
   return (
     <RootDocument>
+      <OttHandler />
       <Outlet />
       <DevtoolsWrapper />
     </RootDocument>

@@ -38,6 +38,8 @@ function createChainMock() {
       statusChangeToId: null,
     },
   ])
+  // Support .catch() for fire-and-forget patterns (e.g. createActivity)
+  chain.catch = vi.fn().mockReturnValue(Promise.resolve())
   return chain
 }
 
@@ -123,6 +125,7 @@ vi.mock('@/lib/server/db', async () => {
     posts: { id: 'id', commentCount: 'comment_count' },
     boards: { id: 'id' },
     postStatuses: { id: 'id' },
+    postActivity: {},
   }
 })
 

@@ -1,4 +1,5 @@
-import { ChevronUpIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline'
+import { ChevronUpIcon } from '@heroicons/react/24/solid'
+import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline'
 import { Squares2X2Icon } from '@heroicons/react/24/solid'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { TimeAgo } from '@/components/ui/time-ago'
@@ -18,6 +19,8 @@ interface CompactPostCardProps {
   label?: string
   /** Click handler — makes the whole card interactive */
   onClick?: () => void
+  /** Custom vote slot (replaces the default static vote pill) */
+  voteSlot?: React.ReactNode
   /** Right-side action slot (rendered outside the clickable area) */
   actions?: React.ReactNode
   className?: string
@@ -36,6 +39,7 @@ export function CompactPostCard({
   commentCount,
   createdAt,
   label,
+  voteSlot,
   onClick,
   actions,
   className,
@@ -47,10 +51,12 @@ export function CompactPostCard({
   const content = (
     <div className="flex items-start gap-2.5">
       {/* Vote pill */}
-      <div className="flex items-center shrink-0 rounded-md border border-border/50 bg-muted/40 px-2.5 py-1.5 gap-1">
-        <ChevronUpIcon className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs font-semibold tabular-nums text-foreground">{voteCount}</span>
-      </div>
+      {voteSlot ?? (
+        <div className="flex flex-col items-center justify-center shrink-0 self-stretch rounded-md border border-border/50 bg-muted/40 px-3.5 py-1.5 gap-1">
+          <ChevronUpIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold tabular-nums text-foreground">{voteCount}</span>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-w-0">

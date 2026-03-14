@@ -16,6 +16,7 @@ export interface CreatePostInput {
   contentJson?: TiptapContent | null
   statusId?: StatusId
   tagIds?: TagId[]
+  widgetMetadata?: Record<string, string>
 }
 
 /**
@@ -209,6 +210,8 @@ export interface PublicComment {
   authorName: string | null
   principalId: string | null
   createdAt: Date
+  deletedAt: Date | null
+  isRemovedByTeam: boolean
   parentId: CommentId | null
   isTeamMember: boolean
   avatarUrl: string | null

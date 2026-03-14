@@ -200,6 +200,9 @@ const updatePortalConfigSchema = z.object({
       submissions: z.boolean().optional(),
       comments: z.boolean().optional(),
       voting: z.boolean().optional(),
+      anonymousVoting: z.boolean().optional(),
+      anonymousCommenting: z.boolean().optional(),
+      anonymousPosting: z.boolean().optional(),
     })
     .optional(),
 })

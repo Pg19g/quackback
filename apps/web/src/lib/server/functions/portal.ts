@@ -11,7 +11,7 @@ import {
   type UserId,
 } from '@quackback/ids'
 import type { BoardSettings } from '@/lib/server/db'
-import { getOptionalAuth, hasSessionCookie } from './auth-helpers'
+import { getOptionalAuth, hasAuthCredentials } from './auth-helpers'
 import { isTeamMember } from '@/lib/shared/roles'
 import { db, principal as principalTable, user as userTable, eq, inArray } from '@/lib/server/db'
 import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
@@ -164,7 +164,7 @@ export const fetchPublicPostDetail = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     console.log(`[fn:portal] fetchPublicPostDetail: postId=${data.postId}`)
     // Only fetch auth if user has a session cookie (for highlighting own comments)
-    const principalId = hasSessionCookie() ? (await getOptionalAuth())?.principal?.id : undefined
+    const principalId = hasAuthCredentials() ? (await getOptionalAuth())?.principal?.id : undefined
     const result = await getPublicPostDetail(data.postId as PostId, principalId)
 
     if (!result) return null
@@ -358,7 +358,7 @@ export const fetchPublicRoadmapPosts = createServerFn({ method: 'GET' })
     try {
       // Segment filtering requires admin/member role
       let segmentIds: SegmentId[] | undefined
-      if (data.segmentIds?.length && hasSessionCookie()) {
+      if (data.segmentIds?.length && hasAuthCredentials()) {
         const auth = await getOptionalAuth()
         if (auth && isTeamMember(auth.principal.role)) {
           segmentIds = data.segmentIds as SegmentId[]
@@ -402,7 +402,7 @@ export const getCommentsSectionDataFn = createServerFn({ method: 'GET' }).handle
   console.log(`[fn:portal] getCommentsSectionDataFn`)
   try {
     // Early bailout: no session cookie = anonymous user (skip DB queries)
-    if (!hasSessionCookie()) {
+    if (!hasAuthCredentials()) {
       return {
         isMember: false,
         canComment: false,
@@ -413,9 +413,17 @@ export const getCommentsSectionDataFn = createServerFn({ method: 'GET' }).handle
     const ctx = await getOptionalAuth()
     const isMember = !!(ctx?.user && ctx?.principal)
 
+    // Anonymous users can only comment if the setting is enabled
+    let canComment = isMember
+    if (isMember && ctx.principal.type === 'anonymous') {
+      const { getPortalConfig } = await import('@/lib/server/domains/settings/settings.service')
+      const config = await getPortalConfig()
+      canComment = config.features.anonymousCommenting
+    }
+
     return {
       isMember,
-      canComment: isMember,
+      canComment,
       user: isMember
         ? { name: ctx.user.name, email: ctx.user.email, principalId: ctx.principal.id }
         : undefined,

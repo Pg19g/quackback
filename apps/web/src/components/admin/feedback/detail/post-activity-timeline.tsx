@@ -258,6 +258,18 @@ const ACTIVITY_CONFIG: Partial<Record<ActivityType, ActivityDisplayConfig>> = {
     icon: ChatBubbleLeftIcon,
     label: (_, a) => `${actorLabel(a)} unpinned the response`,
   },
+  'comment.deleted': {
+    icon: TrashIcon,
+    label: (_, a) => `${actorLabel(a)} deleted their comment`,
+  },
+  'comment.removed': {
+    icon: TrashIcon,
+    label: (_, a) => `${actorLabel(a)} removed a comment`,
+  },
+  'comment.restored': {
+    icon: ArrowUturnLeftIcon,
+    label: (_, a) => `${actorLabel(a)} restored a comment`,
+  },
 }
 
 // ============================================

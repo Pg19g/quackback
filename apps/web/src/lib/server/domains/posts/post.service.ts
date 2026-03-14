@@ -131,6 +131,7 @@ export async function createPost(
       contentJson: input.contentJson ?? plainTextToTipTap(content),
       statusId,
       principalId: author.principalId,
+      widgetMetadata: input.widgetMetadata ?? null,
     })
     .returning()
 
@@ -264,6 +265,15 @@ export async function updatePost(
     updatedPost = result
   } else {
     updatedPost = existingPost
+  }
+
+  // Regenerate embedding (and cascade to merge check) if title or content changed
+  if (input.title !== undefined || input.content !== undefined) {
+    import('@/lib/server/domains/embeddings/embedding.service')
+      .then(({ generatePostEmbedding }) =>
+        generatePostEmbedding(id, updatedPost.title, updatedPost.content)
+      )
+      .catch((err) => console.error(`[domain:posts] Embedding regen failed for ${id}:`, err))
   }
 
   // Update tags if provided

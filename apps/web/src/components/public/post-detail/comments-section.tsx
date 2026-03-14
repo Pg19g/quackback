@@ -6,12 +6,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { CommentId, PostId } from '@quackback/ids'
 
 /**
- * Recursively count all comments including nested replies
+ * Recursively count all live (non-deleted) comments including nested replies
  */
 function countAllComments(comments: PublicCommentView[]): number {
   let count = 0
   for (const comment of comments) {
-    count += 1 + countAllComments(comment.replies)
+    if (!comment.deletedAt) count += 1
+    count += countAllComments(comment.replies)
   }
   return count
 }
@@ -71,6 +72,14 @@ interface CommentsSectionProps {
   currentStatusId?: string | null
   /** Whether the current user is a team member */
   isTeamMember?: boolean
+  /** Callback when a comment is deleted */
+  onDeleteComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being deleted */
+  deletingCommentId?: CommentId | null
+  /** Callback when a comment is restored (team only) */
+  onRestoreComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being restored */
+  restoringCommentId?: CommentId | null
 }
 
 export function CommentsSection({
@@ -87,6 +96,10 @@ export function CommentsSection({
   statuses,
   currentStatusId,
   isTeamMember,
+  onDeleteComment,
+  deletingCommentId,
+  onRestoreComment,
+  restoringCommentId,
 }: CommentsSectionProps) {
   const commentCount = useMemo(() => countAllComments(comments), [comments])
 
@@ -130,6 +143,10 @@ export function CommentsSection({
         statuses={statuses}
         currentStatusId={currentStatusId}
         isTeamMember={isTeamMember}
+        onDeleteComment={onDeleteComment}
+        deletingCommentId={deletingCommentId}
+        onRestoreComment={onRestoreComment}
+        restoringCommentId={restoringCommentId}
         hideCommentForm={disableCommenting && !!adminUser}
       />
     </div>

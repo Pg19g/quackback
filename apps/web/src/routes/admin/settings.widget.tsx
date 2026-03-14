@@ -363,13 +363,15 @@ export function WidgetIdentify() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) return;
-
-    Quackback("identify", {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-    });
+    if (user) {
+      Quackback("identify", {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      });
+    } else {
+      Quackback("identify", { anonymous: true });
+    }
   }, [user]);
 
   return null;
@@ -382,18 +384,20 @@ export function WidgetIdentify() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) return;
-
-    fetch("/api/widget-hash", { method: "POST" })
-      .then((res) => res.json())
-      .then(({ hash }) => {
-        Quackback("identify", {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          hash,
+    if (user) {
+      fetch("/api/widget-hash", { method: "POST" })
+        .then((res) => res.json())
+        .then(({ hash }) => {
+          Quackback("identify", {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            hash,
+          });
         });
-      });
+    } else {
+      Quackback("identify", { anonymous: true });
+    }
   }, [user]);
 
   return null;
@@ -549,9 +553,7 @@ function WidgetInstallation({
               </span>
               <div>
                 <span className="text-xs font-medium text-foreground">Identify users</span>
-                <p className="text-[11px] text-muted-foreground">
-                  Required to allow voting and submissions
-                </p>
+                <p className="text-[11px] text-muted-foreground">Required to display the widget</p>
               </div>
             </div>
 

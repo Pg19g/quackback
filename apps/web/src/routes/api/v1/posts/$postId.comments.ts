@@ -52,6 +52,9 @@ export const Route = createFileRoute('/api/v1/posts/$postId/comments')({
             isTeamMember: c.isTeamMember,
             isPrivate: c.isPrivate,
             createdAt: c.createdAt.toISOString(),
+            deletedAt: c.deletedAt?.toISOString() ?? null,
+            isRemovedByTeam:
+              !!c.deletedAt && !!c.deletedByPrincipalId && c.deletedByPrincipalId !== c.principalId,
             reactions: c.reactions,
             replies: c.replies.map(serializeComment),
           })

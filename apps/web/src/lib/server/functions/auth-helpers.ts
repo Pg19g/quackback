@@ -28,6 +28,18 @@ export function hasSessionCookie(): boolean {
 }
 
 /**
+ * Check if the request has any form of authentication (cookie or Bearer token).
+ * Use this instead of hasSessionCookie() when the endpoint should support
+ * both portal (cookie) and widget (Bearer token) authentication.
+ */
+export function hasAuthCredentials(): boolean {
+  const headers = getRequestHeaders()
+  const cookie = headers.get('cookie') ?? ''
+  const auth = headers.get('authorization') ?? ''
+  return cookie.includes('better-auth.session_token') || auth.startsWith('Bearer ')
+}
+
+/**
  * Get session directly from better-auth (not through server function).
  * This avoids nested server function call issues.
  */
@@ -57,6 +69,7 @@ export interface AuthContext {
   principal: {
     id: PrincipalId
     role: Role
+    type: string
   }
 }
 
@@ -117,6 +130,7 @@ export async function requireAuth(options?: { roles?: Role[] }): Promise<AuthCon
       principal: {
         id: principalRecord.id as PrincipalId,
         role: principalRecord.role as Role,
+        type: principalRecord.type,
       },
     }
   } catch (error) {
@@ -182,6 +196,7 @@ export async function getOptionalAuth(): Promise<AuthContext | null> {
       principal: {
         id: principalRecord.id as PrincipalId,
         role: principalRecord.role as Role,
+        type: principalRecord.type,
       },
     }
   } catch (error) {

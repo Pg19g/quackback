@@ -17,13 +17,14 @@ import {
   deleteComment,
   pinComment,
   removeReaction,
+  restoreComment,
   softDeleteComment,
   unpinComment,
   updateComment,
   userEditComment,
 } from '@/lib/server/domains/comments/comment.service'
 import { NotFoundError } from '@/lib/shared/errors'
-import { getOptionalAuth, requireAuth, hasSessionCookie } from './auth-helpers'
+import { getOptionalAuth, requireAuth, hasAuthCredentials } from './auth-helpers'
 
 // Schemas
 const createCommentSchema = z.object({
@@ -77,6 +78,15 @@ export const createCommentFn = createServerFn({ method: 'POST' })
     console.log(`[fn:comments] createCommentFn: postId=${data.postId}`)
     try {
       const auth = await requireAuth({ roles: ['admin', 'member', 'user'] })
+
+      // Block anonymous users unless anonymousCommenting is enabled
+      if (auth.principal.type === 'anonymous') {
+        const { getPortalConfig } = await import('@/lib/server/domains/settings/settings.service')
+        const config = await getPortalConfig()
+        if (!config.features.anonymousCommenting) {
+          throw new Error('Anonymous commenting is not enabled')
+        }
+      }
 
       const result = await createComment(
         {
@@ -190,7 +200,7 @@ export const getCommentPermissionsFn = createServerFn({ method: 'GET' })
     console.log(`[fn:comments] getCommentPermissionsFn: commentId=${data.commentId}`)
     try {
       // Early bailout: no session cookie = no permissions (skip DB queries)
-      if (!hasSessionCookie()) {
+      if (!hasAuthCredentials()) {
         console.log(`[fn:comments] getCommentPermissionsFn: no session cookie, skipping auth`)
         return { canEdit: false, canDelete: false }
       }
@@ -254,6 +264,32 @@ export const userDeleteCommentFn = createServerFn({ method: 'POST' })
       return { id: data.commentId }
     } catch (error) {
       console.error(`[fn:comments] ❌ userDeleteCommentFn failed:`, error)
+      throw error
+    }
+  })
+
+// Restore Operations
+const restoreCommentSchema = z.object({
+  commentId: z.string(),
+})
+
+export type RestoreCommentInput = z.infer<typeof restoreCommentSchema>
+
+export const restoreCommentFn = createServerFn({ method: 'POST' })
+  .inputValidator(restoreCommentSchema)
+  .handler(async ({ data }) => {
+    console.log(`[fn:comments] restoreCommentFn: commentId=${data.commentId}`)
+    try {
+      const auth = await requireAuth({ roles: ['admin', 'member'] })
+
+      await restoreComment(data.commentId as CommentId, {
+        principalId: auth.principal.id,
+        role: auth.principal.role,
+      })
+      console.log(`[fn:comments] restoreCommentFn: restored id=${data.commentId}`)
+      return { id: data.commentId }
+    } catch (error) {
+      console.error(`[fn:comments] ❌ restoreCommentFn failed:`, error)
       throw error
     }
   })
@@ -336,7 +372,7 @@ export const canPinCommentFn = createServerFn({ method: 'GET' })
     console.log(`[fn:comments] canPinCommentFn: commentId=${data.commentId}`)
     try {
       // Early bailout: no session cookie = can't pin (skip DB queries)
-      if (!hasSessionCookie()) {
+      if (!hasAuthCredentials()) {
         console.log(`[fn:comments] canPinCommentFn: no session cookie, skipping auth`)
         return { canPin: false, reason: 'Only team members can pin comments' }
       }

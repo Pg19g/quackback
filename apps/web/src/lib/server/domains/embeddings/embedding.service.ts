@@ -116,6 +116,12 @@ export async function generatePostEmbedding(
   }
 
   await savePostEmbedding(postId, embedding)
+
+  // Fire-and-forget: check for merge candidates now that embedding is fresh
+  import('@/lib/server/domains/merge-suggestions/merge-check.service')
+    .then(({ checkPostForMergeCandidates }) => checkPostForMergeCandidates(postId))
+    .catch((err) => console.error(`[Embedding] Merge check failed for ${postId}:`, err))
+
   return true
 }
 
@@ -132,6 +138,7 @@ export async function savePostEmbedding(postId: PostId, embedding: number[]): Pr
       embedding: sql<number[]>`${vectorStr}::vector`,
       embeddingModel: EMBEDDING_MODEL,
       embeddingUpdatedAt: new Date(),
+      mergeCheckedAt: null,
     })
     .where(eq(posts.id, postId))
 }

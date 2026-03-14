@@ -33,6 +33,9 @@ export type ActivityType =
   | 'comments.unlocked'
   | 'comment.pinned'
   | 'comment.unpinned'
+  | 'comment.deleted'
+  | 'comment.removed'
+  | 'comment.restored'
 
 export interface CreateActivityOpts {
   postId: PostId

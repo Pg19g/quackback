@@ -190,13 +190,14 @@ export async function unmergePost(
 
   const canonicalPostId = post.canonicalPostId as PostId
 
-  // Clear merge fields
+  // Clear merge fields and reset merge check so the post gets re-evaluated
   await db
     .update(posts)
     .set({
       canonicalPostId: null,
       mergedAt: null,
       mergedByPrincipalId: null,
+      mergeCheckedAt: null,
     })
     .where(eq(posts.id, postId))
 

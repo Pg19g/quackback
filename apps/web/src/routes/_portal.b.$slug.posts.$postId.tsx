@@ -19,9 +19,11 @@ import { DeletePostDialog } from '@/components/public/post-detail/delete-post-di
 import { usePostPermissions, postPermissionsKeys } from '@/lib/client/hooks/use-portal-posts-query'
 import { getPostPermissionsFn } from '@/lib/server/functions/public-posts'
 import { usePostActions } from '@/lib/client/mutations'
+import { useDeleteComment } from '@/lib/client/mutations/portal-comments'
+import { toast } from 'sonner'
 import { PortalMergeBanner } from '@/components/public/post-detail/merge-banner'
 import { similarPostsQuery } from '@/components/public/post-detail/similar-posts-section'
-import { isValidTypeId, type PostId } from '@quackback/ids'
+import { isValidTypeId, type CommentId, type PostId } from '@quackback/ids'
 import type { TiptapContent } from '@/lib/shared/schemas/posts'
 
 export const Route = createFileRoute('/_portal/b/$slug/posts/$postId')({
@@ -119,6 +121,11 @@ function PostDetailPage() {
     boardSlug: slug,
     onEditSuccess: () => setIsEditingPost(false),
     onDeleteSuccess: () => setDeleteDialogOpen(false),
+  })
+
+  const deleteComment = useDeleteComment({
+    postId,
+    onError: (error) => toast.error(error.message || 'Failed to delete comment'),
   })
 
   const post = postQuery.data
@@ -220,6 +227,10 @@ function PostDetailPage() {
             pinnedCommentId={post.pinnedCommentId}
             disableCommenting={!!post.mergeInfo || !!post.isCommentsLocked}
             lockedMessage={post.isCommentsLocked ? 'Comments are locked on this post' : undefined}
+            onDeleteComment={(commentId: CommentId) => deleteComment.mutate(commentId)}
+            deletingCommentId={
+              deleteComment.isPending ? (deleteComment.variables as CommentId) : null
+            }
           />
         </Suspense>
       </div>

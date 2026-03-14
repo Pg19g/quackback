@@ -47,12 +47,34 @@ vi.mock('@/lib/server/domains/comments/comment.service', () => ({
 // --- Mock: auth helpers ---
 
 const mockGetOptionalAuth = vi.fn()
-const mockHasSessionCookie = vi.fn()
+const mockHasAuthCredentials = vi.fn()
+const mockRequireAuth = vi.fn()
 
 vi.mock('@/lib/server/functions/auth-helpers', () => ({
   getOptionalAuth: () => mockGetOptionalAuth(),
-  requireAuth: vi.fn(),
-  hasSessionCookie: () => mockHasSessionCookie(),
+  requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
+  hasAuthCredentials: () => mockHasAuthCredentials(),
+  hasSessionCookie: vi.fn(),
+}))
+
+// --- Mock: shared roles ---
+
+vi.mock('@/lib/shared/roles', () => ({
+  isTeamMember: (role: string) => role === 'admin' || role === 'member',
+}))
+
+// --- Mock: settings service (dynamic import for createCommentFn anonymous check) ---
+
+vi.mock('@/lib/server/domains/settings/settings.service', () => ({
+  getPortalConfig: vi.fn().mockResolvedValue({
+    features: { anonymousCommenting: false, anonymousVoting: false, anonymousPosting: false },
+  }),
+}))
+
+// --- Mock: activity service ---
+
+vi.mock('@/lib/server/domains/activity/activity.service', () => ({
+  createActivity: vi.fn(),
 }))
 
 // --- Handler setup ---
@@ -60,10 +82,10 @@ vi.mock('@/lib/server/functions/auth-helpers', () => ({
 // Handler indices match the declaration order in comments.ts:
 // 0: createCommentFn, 1: updateCommentFn, 2: deleteCommentFn,
 // 3: addReactionFn, 4: removeReactionFn, 5: getCommentPermissionsFn,
-// 6: userEditCommentFn, 7: userDeleteCommentFn, 8: pinCommentFn,
-// 9: unpinCommentFn, 10: canPinCommentFn
+// 6: userEditCommentFn, 7: userDeleteCommentFn, 8: restoreCommentFn,
+// 9: pinCommentFn, 10: unpinCommentFn, 11: canPinCommentFn
 const HANDLER_INDEX_GET_COMMENT_PERMISSIONS = 5
-const HANDLER_INDEX_CAN_PIN_COMMENT = 10
+const HANDLER_INDEX_CAN_PIN_COMMENT = 11
 
 let getCommentPermissionsHandler: AnyHandler
 let canPinCommentHandler: AnyHandler
@@ -95,7 +117,7 @@ const MOCK_AUTH_CONTEXT = {
 
 describe('getCommentPermissionsFn error handling', () => {
   it('should catch NotFoundError and return no-permission defaults', async () => {
-    mockHasSessionCookie.mockReturnValue(true)
+    mockHasAuthCredentials.mockReturnValue(true)
     mockGetOptionalAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockCanEditComment.mockRejectedValue(
       new NotFoundError('COMMENT_NOT_FOUND', 'Comment not found')
@@ -107,7 +129,7 @@ describe('getCommentPermissionsFn error handling', () => {
   })
 
   it('should re-throw non-NotFoundError errors', async () => {
-    mockHasSessionCookie.mockReturnValue(true)
+    mockHasAuthCredentials.mockReturnValue(true)
     mockGetOptionalAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockCanEditComment.mockRejectedValue(new Error('Database connection lost'))
 
@@ -117,7 +139,7 @@ describe('getCommentPermissionsFn error handling', () => {
   })
 
   it('should re-throw TypeError (not a NotFoundError)', async () => {
-    mockHasSessionCookie.mockReturnValue(true)
+    mockHasAuthCredentials.mockReturnValue(true)
     mockGetOptionalAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockCanEditComment.mockRejectedValue(new TypeError('Cannot read properties of undefined'))
 
@@ -133,7 +155,8 @@ describe('getCommentPermissionsFn error handling', () => {
 
 describe('canPinCommentFn error handling', () => {
   it('should catch NotFoundError and return canPin=false with reason', async () => {
-    mockHasSessionCookie.mockReturnValue(true)
+    mockHasAuthCredentials.mockReturnValue(true)
+    mockRequireAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockGetOptionalAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockCanPinComment.mockRejectedValue(new NotFoundError('COMMENT_NOT_FOUND', 'Comment not found'))
 
@@ -143,7 +166,8 @@ describe('canPinCommentFn error handling', () => {
   })
 
   it('should re-throw non-NotFoundError errors', async () => {
-    mockHasSessionCookie.mockReturnValue(true)
+    mockHasAuthCredentials.mockReturnValue(true)
+    mockRequireAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockGetOptionalAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockCanPinComment.mockRejectedValue(new Error('Database connection lost'))
 
@@ -153,7 +177,8 @@ describe('canPinCommentFn error handling', () => {
   })
 
   it('should re-throw TypeError (not a NotFoundError)', async () => {
-    mockHasSessionCookie.mockReturnValue(true)
+    mockHasAuthCredentials.mockReturnValue(true)
+    mockRequireAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockGetOptionalAuth.mockResolvedValue(MOCK_AUTH_CONTEXT)
     mockCanPinComment.mockRejectedValue(new TypeError('Cannot read properties of undefined'))
 

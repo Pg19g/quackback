@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { ChevronUpIcon } from '@heroicons/react/24/solid'
 import { usePostVote } from '@/lib/client/hooks/use-post-vote'
 import { cn } from '@/lib/shared/utils'
@@ -6,11 +7,16 @@ import type { PostId } from '@quackback/ids'
 interface VoteButtonProps {
   postId: PostId
   voteCount: number
+  /** Structurally disabled (e.g. merged post) — visually dimmed, no interaction */
   disabled?: boolean
-  /** Called when user tries to vote but isn't authenticated */
+  /** Called when unauthenticated user clicks — button looks normal, clicking triggers this */
   onAuthRequired?: () => void
+  /** Async callback before voting (e.g. anonymous sign-in). Return false to cancel. */
+  onBeforeVote?: () => Promise<boolean>
   /** Compact horizontal variant for inline use */
   compact?: boolean
+  /** Pill variant — vertical, self-stretches to parent height */
+  pill?: boolean
   /** Static display with no interactivity */
   readonly?: boolean
 }
@@ -20,7 +26,9 @@ export function VoteButton({
   voteCount: initialVoteCount,
   disabled = false,
   onAuthRequired,
+  onBeforeVote,
   compact = false,
+  pill = false,
   readonly = false,
 }: VoteButtonProps): React.ReactElement {
   const { voteCount, hasVoted, isPending, handleVote } = usePostVote({
@@ -30,37 +38,55 @@ export function VoteButton({
   })
 
   const displayCount = readonly ? initialVoteCount : voteCount
+  const isHandlingRef = useRef(false)
 
-  function handleClick(): void {
-    if (disabled) {
-      onAuthRequired?.()
+  async function handleClick(): Promise<void> {
+    if (disabled) return
+    if (onAuthRequired) {
+      onAuthRequired()
       return
+    }
+    if (isHandlingRef.current) return
+    if (onBeforeVote) {
+      isHandlingRef.current = true
+      try {
+        const proceed = await onBeforeVote()
+        if (!proceed) return
+      } finally {
+        isHandlingRef.current = false
+      }
     }
     handleVote()
   }
 
+  const isInteractive = !readonly && !disabled
+
   const sharedClassName = cn(
     'relative flex items-center justify-center',
     'border rounded-md',
-    compact ? 'flex-row gap-1 py-1.5 px-2.5 text-xs' : 'flex-col w-12 py-2 gap-0.5',
+    compact
+      ? 'flex-row gap-1 py-1.5 px-2.5 text-xs'
+      : pill
+        ? 'flex-col self-stretch px-3.5 py-1.5 gap-1'
+        : 'flex-col w-12 py-2 gap-0.5',
     'bg-muted/40 text-muted-foreground',
-    !readonly && 'group transition-colors duration-200 cursor-pointer',
-    !readonly &&
+    isInteractive && 'group transition-colors duration-200 cursor-pointer',
+    isInteractive &&
       (hasVoted
         ? 'border-post-card-voted/60 bg-post-card-voted/15 text-post-card-voted'
         : 'border-border/50 hover:border-border hover:bg-muted/60 hover:text-foreground/80'),
-    readonly && 'border-border/50',
-    !readonly && isPending && 'opacity-70 cursor-wait',
-    !readonly && disabled && 'cursor-not-allowed opacity-50'
+    (readonly || disabled) && 'border-border/50',
+    isInteractive && isPending && 'opacity-70 cursor-wait',
+    disabled && 'cursor-not-allowed opacity-50'
   )
 
   const chevron = (
     <ChevronUpIcon
       className={cn(
-        compact ? 'h-3.5 w-3.5' : 'h-4 w-4',
-        !readonly && 'transition-transform duration-200',
-        !readonly && hasVoted && 'fill-post-card-voted',
-        !readonly && !isPending && !disabled && 'group-hover:-translate-y-0.5'
+        compact || pill ? 'h-3.5 w-3.5' : 'h-4 w-4',
+        isInteractive && 'transition-transform duration-200',
+        isInteractive && hasVoted && 'fill-post-card-voted',
+        isInteractive && !isPending && 'group-hover:-translate-y-0.5'
       )}
     />
   )
@@ -70,8 +96,8 @@ export function VoteButton({
       data-testid="vote-count"
       className={cn(
         'font-semibold tabular-nums',
-        compact ? 'text-xs' : 'text-sm',
-        !readonly && hasVoted ? 'text-post-card-voted' : 'text-foreground'
+        compact || pill ? 'text-xs' : 'text-sm',
+        isInteractive && hasVoted ? 'text-post-card-voted' : 'text-foreground'
       )}
     >
       {displayCount}

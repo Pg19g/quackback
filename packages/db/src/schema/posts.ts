@@ -84,6 +84,8 @@ export const posts = pgTable(
     })
       .default('published')
       .notNull(),
+    // Key-value metadata attached by the widget SDK
+    widgetMetadata: jsonb('widget_metadata').$type<Record<string, string>>(),
     // Merge/deduplication: points to the canonical post this was merged into
     canonicalPostId: typeIdColumnNullable('post')('canonical_post_id'),
     mergedAt: timestamp('merged_at', { withTimezone: true }),
@@ -250,6 +252,11 @@ export const comments = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     // Soft delete support
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    // Who initiated the deletion (self-delete vs team-removed)
+    deletedByPrincipalId: typeIdColumnNullable('principal')('deleted_by_principal_id').references(
+      () => principal.id,
+      { onDelete: 'set null' }
+    ),
   },
   (table) => [
     index('comments_post_id_idx').on(table.postId),
@@ -447,6 +454,11 @@ export const commentsRelations = relations(comments, ({ one, many }) => ({
     fields: [comments.statusChangeToId],
     references: [postStatuses.id],
     relationName: 'commentStatusChangeTo',
+  }),
+  deletedBy: one(principal, {
+    fields: [comments.deletedByPrincipalId],
+    references: [principal.id],
+    relationName: 'commentDeletedBy',
   }),
 }))
 

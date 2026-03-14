@@ -17,6 +17,9 @@ export function toPortalComments(post: PostDetails): PublicCommentView[] {
     authorName: c.authorName,
     principalId: c.principalId,
     createdAt: c.createdAt,
+    deletedAt: c.deletedAt ?? null,
+    isRemovedByTeam:
+      !!c.deletedAt && !!c.deletedByPrincipalId && c.deletedByPrincipalId !== c.principalId,
     parentId: c.parentId as CommentId | null,
     isTeamMember: c.isTeamMember,
     avatarUrl: (c.principalId && post.avatarUrls?.[c.principalId]) || null,

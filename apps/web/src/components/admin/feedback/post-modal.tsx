@@ -48,7 +48,14 @@ import { DeletePostDialog } from '@/components/public/post-detail/delete-post-di
 import { usePostDetailKeyboard } from '@/lib/client/hooks/use-post-detail-keyboard'
 import { addPostToRoadmapFn, removePostFromRoadmapFn } from '@/lib/server/functions/roadmaps'
 import { useRouterState } from '@tanstack/react-router'
-import { type PostId, type StatusId, type TagId, type RoadmapId } from '@quackback/ids'
+import {
+  type PostId,
+  type StatusId,
+  type TagId,
+  type RoadmapId,
+  type CommentId,
+} from '@quackback/ids'
+import { useDeleteComment, useRestoreComment } from '@/lib/client/mutations/portal-comments'
 import type { PostDetails, CurrentUser } from '@/components/admin/feedback/inbox-types'
 import {
   toPortalComments,
@@ -110,6 +117,14 @@ function PostModalContent({
   const updateTags = useUpdatePostTags()
   const pinComment = usePinComment({ postId: post.id as PostId })
   const unpinComment = useUnpinComment({ postId: post.id as PostId })
+  const deleteCommentMutation = useDeleteComment({
+    postId: post.id as PostId,
+    onError: (error) => toast.error(error.message || 'Failed to delete comment'),
+  })
+  const restoreCommentMutation = useRestoreComment({
+    postId: post.id as PostId,
+    onError: (error) => toast.error(error.message || 'Failed to restore comment'),
+  })
   const toggleCommentsLock = useToggleCommentsLock()
   const deletePost = useDeletePost()
   const restorePostMutation = useRestorePost()
@@ -403,6 +418,22 @@ function PostModalContent({
                     statuses={statuses}
                     currentStatusId={post.statusId}
                     isTeamMember
+                    onDeleteComment={(commentId: CommentId) =>
+                      deleteCommentMutation.mutate(commentId)
+                    }
+                    deletingCommentId={
+                      deleteCommentMutation.isPending
+                        ? (deleteCommentMutation.variables as CommentId)
+                        : null
+                    }
+                    onRestoreComment={(commentId: CommentId) =>
+                      restoreCommentMutation.mutate(commentId)
+                    }
+                    restoringCommentId={
+                      restoreCommentMutation.isPending
+                        ? (restoreCommentMutation.variables as CommentId)
+                        : null
+                    }
                   />
                 </Suspense>
               ) : (

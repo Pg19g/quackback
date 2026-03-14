@@ -10,6 +10,7 @@ import {
   createCommentFn,
   userEditCommentFn,
   userDeleteCommentFn,
+  restoreCommentFn,
   addReactionFn,
   removeReactionFn,
   pinCommentFn,
@@ -62,7 +63,7 @@ interface UseEditCommentOptions {
 }
 
 interface UseDeleteCommentOptions {
-  commentId: CommentId
+  commentId?: CommentId
   postId: PostId
   onSuccess?: () => void
   onError?: (error: Error) => void
@@ -246,7 +247,7 @@ export function useEditComment({ commentId, postId, onSuccess, onError }: UseEdi
  * Hook for a user to soft-delete their own comment.
  */
 export function useDeleteComment({
-  commentId,
+  commentId: fixedCommentId,
   postId,
   onSuccess,
   onError,
@@ -254,10 +255,38 @@ export function useDeleteComment({
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => userDeleteCommentFn({ data: { commentId } }),
+    mutationFn: (dynamicCommentId?: CommentId) =>
+      userDeleteCommentFn({ data: { commentId: dynamicCommentId ?? fixedCommentId! } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: portalDetailQueries.postDetail(postId).queryKey })
       queryClient.invalidateQueries({ queryKey: ['inbox', 'detail', postId] })
+      queryClient.invalidateQueries({ queryKey: ['activity', 'post', postId] })
+      onSuccess?.()
+    },
+    onError,
+  })
+}
+
+/**
+ * Hook for a team member to restore a soft-deleted comment.
+ */
+export function useRestoreComment({
+  postId,
+  onSuccess,
+  onError,
+}: {
+  postId: PostId
+  onSuccess?: () => void
+  onError?: (error: Error) => void
+}) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: CommentId) => restoreCommentFn({ data: { commentId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: portalDetailQueries.postDetail(postId).queryKey })
+      queryClient.invalidateQueries({ queryKey: ['inbox', 'detail', postId] })
+      queryClient.invalidateQueries({ queryKey: ['activity', 'post', postId] })
       onSuccess?.()
     },
     onError,

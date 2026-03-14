@@ -8,6 +8,7 @@ import {
   LockClosedIcon,
   MapPinIcon,
 } from '@heroicons/react/24/solid'
+import { TrashIcon } from '@heroicons/react/24/outline'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,13 +21,13 @@ import type { PublicCommentView } from '@/lib/client/queries/portal-detail'
 import { cn, getInitials } from '@/lib/shared/utils'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { CommentForm, type CreateCommentMutation } from './comment-form'
-import type { CommentId, PostId } from '@quackback/ids'
+import type { CommentId, PostId, PrincipalId } from '@quackback/ids'
 
 interface CommentThreadProps {
   postId: PostId
   comments: PublicCommentView[]
   allowCommenting?: boolean
-  user?: { name: string | null; email: string }
+  user?: { name: string | null; email: string; principalId?: PrincipalId }
   /** Logo URL for the team badge (from branding settings) */
   teamBadgeLogoUrl?: string
   /** Message to show when comments are locked (overrides "Sign in to comment") */
@@ -55,6 +56,14 @@ interface CommentThreadProps {
   isTeamMember?: boolean
   /** Hide the comment form area entirely (for readonly previews) */
   hideCommentForm?: boolean
+  /** Callback when a comment is deleted */
+  onDeleteComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being deleted (for loading state) */
+  deletingCommentId?: CommentId | null
+  /** Callback when a comment is restored (team only) */
+  onRestoreComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being restored */
+  restoringCommentId?: CommentId | null
 }
 
 export function CommentThread({
@@ -75,6 +84,10 @@ export function CommentThread({
   currentStatusId,
   isTeamMember,
   hideCommentForm = false,
+  onDeleteComment,
+  deletingCommentId,
+  onRestoreComment,
+  restoringCommentId,
 }: CommentThreadProps) {
   const sortedComments = [...comments].sort((a, b) => {
     // Pinned comment always first
@@ -145,6 +158,10 @@ export function CommentThread({
               onUnpinComment={onUnpinComment}
               isPinPending={isPinPending}
               isTeamMember={isTeamMember}
+              onDeleteComment={onDeleteComment}
+              deletingCommentId={deletingCommentId}
+              onRestoreComment={onRestoreComment}
+              restoringCommentId={restoringCommentId}
             />
           ))}
         </div>
@@ -158,7 +175,7 @@ interface CommentItemProps {
   comment: PublicCommentView
   allowCommenting: boolean
   depth?: number
-  user?: { name: string | null; email: string }
+  user?: { name: string | null; email: string; principalId?: PrincipalId }
   teamBadgeLogoUrl?: string
   createComment?: CreateCommentMutation
   pinnedCommentId?: string | null
@@ -169,6 +186,14 @@ interface CommentItemProps {
   isPinPending?: boolean
   /** Whether the current user is a team member */
   isTeamMember?: boolean
+  /** Callback when a comment is deleted */
+  onDeleteComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being deleted */
+  deletingCommentId?: CommentId | null
+  /** Callback when a comment is restored (team only) */
+  onRestoreComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being restored */
+  restoringCommentId?: CommentId | null
 }
 
 const MAX_NESTING_DEPTH = 5
@@ -187,6 +212,10 @@ function CommentItem({
   onUnpinComment,
   isPinPending = false,
   isTeamMember,
+  onDeleteComment,
+  deletingCommentId,
+  onRestoreComment,
+  restoringCommentId,
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -198,11 +227,22 @@ function CommentItem({
     setReactions(comment.reactions)
   }, [comment.reactions])
 
+  const isDeleted = !!comment.deletedAt
   const canNest = depth < MAX_NESTING_DEPTH
   const hasReplies = comment.replies.length > 0
   const isPinned = pinnedCommentId === comment.id
   // Can pin: admin mode enabled, team member comment, root-level (no parent), not deleted
-  const canPin = canPinComments && comment.isTeamMember && !comment.parentId && depth === 0
+  const canPin =
+    canPinComments && comment.isTeamMember && !comment.parentId && depth === 0 && !isDeleted
+  // Can delete: not already deleted, and user is author or team member
+  const canDelete =
+    !isDeleted &&
+    !!onDeleteComment &&
+    (isTeamMember || (!!user?.principalId && comment.principalId === user.principalId))
+  const isBeingDeleted = deletingCommentId === comment.id
+  // Can restore: deleted, team member, and restore handler provided
+  const canRestore = isDeleted && isTeamMember && !!onRestoreComment
+  const isBeingRestored = restoringCommentId === comment.id
 
   async function handleReaction(emoji: string): Promise<void> {
     setShowEmojiPicker(false)
@@ -219,6 +259,91 @@ function CommentItem({
     } finally {
       setIsPending(false)
     }
+  }
+
+  // Deleted comment placeholder (portal view - when not a team member admin)
+  if (isDeleted && !isTeamMember) {
+    return (
+      <div
+        id={`comment-${comment.id}`}
+        className="group/thread scroll-mt-20 transition-colors duration-500"
+      >
+        <div
+          className={cn(
+            'relative',
+            depth > 0 &&
+              'ml-4 pl-4 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-border/50'
+          )}
+        >
+          <div className="py-2">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8 shrink-0 opacity-40">
+                <AvatarFallback className="text-xs">?</AvatarFallback>
+              </Avatar>
+              <span className="text-sm text-muted-foreground italic">[deleted]</span>
+              <span className="text-muted-foreground text-xs">·</span>
+              <TimeAgo date={comment.createdAt} className="text-xs text-muted-foreground" />
+            </div>
+            <p className="text-sm mt-1.5 ml-10 text-muted-foreground italic">
+              {comment.isRemovedByTeam ? '[removed]' : '[deleted]'}
+            </p>
+            {/* Collapse toggle for replies */}
+            {hasReplies && (
+              <div className="flex items-center gap-1 mt-2 ml-10">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsCollapsed(!isCollapsed)}
+                >
+                  {isCollapsed ? (
+                    <ChevronRightIcon className="h-4 w-4" />
+                  ) : (
+                    <ChevronDownIcon className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Nested replies (still rendered for thread continuity) */}
+          <div
+            className="grid transition-all duration-200 ease-out"
+            style={{
+              gridTemplateRows: !isCollapsed && hasReplies ? '1fr' : '0fr',
+              opacity: !isCollapsed && hasReplies ? 1 : 0,
+            }}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-3">
+                {comment.replies.map((reply) => (
+                  <CommentItem
+                    key={reply.id}
+                    postId={postId}
+                    comment={reply}
+                    allowCommenting={allowCommenting}
+                    depth={depth + 1}
+                    user={user}
+                    teamBadgeLogoUrl={teamBadgeLogoUrl}
+                    createComment={createComment}
+                    pinnedCommentId={pinnedCommentId}
+                    canPinComments={canPinComments}
+                    onPinComment={onPinComment}
+                    onUnpinComment={onUnpinComment}
+                    isPinPending={isPinPending}
+                    isTeamMember={isTeamMember}
+                    onDeleteComment={onDeleteComment}
+                    deletingCommentId={deletingCommentId}
+                    onRestoreComment={onRestoreComment}
+                    restoringCommentId={restoringCommentId}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -242,7 +367,8 @@ function CommentItem({
         <div
           className={cn(
             'py-2',
-            isPinned && 'bg-primary/[0.04] border border-primary/15 rounded-lg px-3 -mx-3'
+            isPinned && 'bg-primary/[0.04] border border-primary/15 rounded-lg px-3 -mx-3',
+            isDeleted && isTeamMember && 'opacity-50'
           )}
         >
           <div className="flex items-center gap-2">
@@ -281,7 +407,7 @@ function CommentItem({
             <TimeAgo date={comment.createdAt} className="text-xs text-muted-foreground" />
           </div>
 
-          {/* Comment content - always visible */}
+          {/* Comment content */}
           <p className="text-sm whitespace-pre-wrap mt-1.5 ml-10 text-foreground/90 leading-relaxed">
             {comment.content}
           </p>
@@ -317,57 +443,60 @@ function CommentItem({
             )}
 
             {/* Existing reactions */}
-            {reactions.map((reaction) => (
-              <button
-                key={reaction.emoji}
-                data-testid="reaction-badge"
-                onClick={() => handleReaction(reaction.emoji)}
-                disabled={isPending}
-                className={cn(
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all duration-150',
-                  'border hover:bg-muted',
-                  'bg-muted/50',
-                  reaction.hasReacted
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground'
-                )}
-              >
-                <span>{reaction.emoji}</span>
-                <span>{reaction.count}</span>
-              </button>
-            ))}
+            {!isDeleted &&
+              reactions.map((reaction) => (
+                <button
+                  key={reaction.emoji}
+                  data-testid="reaction-badge"
+                  onClick={() => handleReaction(reaction.emoji)}
+                  disabled={isPending}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all duration-150',
+                    'border hover:bg-muted',
+                    'bg-muted/50',
+                    reaction.hasReacted
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground'
+                  )}
+                >
+                  <span>{reaction.emoji}</span>
+                  <span>{reaction.count}</span>
+                </button>
+              ))}
 
             {/* Add reaction button */}
-            <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                  disabled={isPending}
-                  data-testid="add-reaction-button"
-                >
-                  <FaceSmileIcon className="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-2" align="start" data-testid="emoji-picker">
-                <div className="flex gap-1">
-                  {REACTION_EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      data-testid="emoji-option"
-                      onClick={() => handleReaction(emoji)}
-                      className="h-8 w-8 flex items-center justify-center rounded hover:bg-muted text-lg transition-colors"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
+            {!isDeleted && (
+              <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    disabled={isPending}
+                    data-testid="add-reaction-button"
+                  >
+                    <FaceSmileIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start" data-testid="emoji-picker">
+                  <div className="flex gap-1">
+                    {REACTION_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        data-testid="emoji-option"
+                        onClick={() => handleReaction(emoji)}
+                        className="h-8 w-8 flex items-center justify-center rounded hover:bg-muted text-lg transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
 
             {/* Reply button */}
-            {allowCommenting && canNest && (
+            {!isDeleted && allowCommenting && canNest && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -391,6 +520,34 @@ function CommentItem({
               >
                 <MapPinIcon className="h-3 w-3 mr-1" />
                 {isPinned ? 'Unpin' : 'Pin'}
+              </Button>
+            )}
+
+            {/* Restore button (admin only, for deleted comments) */}
+            {canRestore && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => onRestoreComment!(comment.id as CommentId)}
+                disabled={isBeingRestored}
+              >
+                <ArrowUturnLeftIcon className="h-3 w-3 mr-1" />
+                {isBeingRestored ? 'Restoring...' : 'Restore'}
+              </Button>
+            )}
+
+            {/* Delete button */}
+            {canDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                onClick={() => onDeleteComment!(comment.id as CommentId)}
+                disabled={isBeingDeleted}
+              >
+                <TrashIcon className="h-3 w-3 mr-1" />
+                {isBeingDeleted ? 'Deleting...' : 'Delete'}
               </Button>
             )}
           </div>
@@ -446,6 +603,10 @@ function CommentItem({
                   onUnpinComment={onUnpinComment}
                   isPinPending={isPinPending}
                   isTeamMember={isTeamMember}
+                  onDeleteComment={onDeleteComment}
+                  deletingCommentId={deletingCommentId}
+                  onRestoreComment={onRestoreComment}
+                  restoringCommentId={restoringCommentId}
                 />
               ))}
             </div>

@@ -2,6 +2,7 @@ import type { PrincipalId, UserId, WorkspaceId } from '@quackback/ids'
 import { generateId } from '@quackback/ids'
 import { getRequestHeaders } from '@tanstack/react-start/server'
 import type { Role } from '@/lib/server/auth'
+import { auth } from '@/lib/server/auth'
 import { db, session, principal, eq, and, gt } from '@/lib/server/db'
 
 export interface WidgetAuthContext {
@@ -19,6 +20,7 @@ export interface WidgetAuthContext {
   principal: {
     id: PrincipalId
     role: Role
+    type: string
   }
 }
 
@@ -80,10 +82,40 @@ export async function getWidgetSession(): Promise<WidgetAuthContext | null> {
       principal: {
         id: principalRecord.id as PrincipalId,
         role: principalRecord.role as Role,
+        type: principalRecord.type ?? 'user',
       },
     }
   } catch (error) {
     console.error(`[fn:widget-auth] getWidgetSession failed:`, error)
     throw error
+  }
+}
+
+/**
+ * Fallback auth for widget endpoints: check for a Better Auth session cookie.
+ * This covers anonymous users who signed in via the anonymous plugin.
+ * Returns a minimal auth context (principalId + type) or null.
+ */
+export async function getWidgetBetterAuthFallback(
+  request: Request
+): Promise<{ principalId: PrincipalId; type: string } | null> {
+  try {
+    const sessionResult = await auth.api.getSession({
+      headers: new Headers(request.headers),
+    })
+    if (!sessionResult?.user) return null
+
+    const userId = sessionResult.user.id as UserId
+    const principalRecord = await db.query.principal.findFirst({
+      where: eq(principal.userId, userId),
+    })
+    if (!principalRecord) return null
+
+    return {
+      principalId: principalRecord.id as PrincipalId,
+      type: principalRecord.type,
+    }
+  } catch {
+    return null
   }
 }

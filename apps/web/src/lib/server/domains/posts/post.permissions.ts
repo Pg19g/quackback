@@ -382,6 +382,15 @@ export async function userEditPost(
     throw new NotFoundError('POST_NOT_FOUND', `Post with ID ${postId} not found`)
   }
 
+  // Regenerate embedding (and cascade to merge check) after user edit
+  import('@/lib/server/domains/embeddings/embedding.service')
+    .then(({ generatePostEmbedding }) =>
+      generatePostEmbedding(postId, updatedPost.title, updatedPost.content)
+    )
+    .catch((err) =>
+      console.error(`[domain:post-permissions] Embedding regen failed for ${postId}:`, err)
+    )
+
   return updatedPost
 }
 

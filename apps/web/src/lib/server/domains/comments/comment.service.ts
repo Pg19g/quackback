@@ -34,6 +34,7 @@ import {
 import { NotFoundError, ValidationError, ForbiddenError } from '@/lib/shared/errors'
 import { isTeamMember } from '@/lib/shared/roles'
 import { subscribeToPost } from '@/lib/server/domains/subscriptions/subscription.service'
+import { createActivity } from '@/lib/server/domains/activity/activity.service'
 import {
   dispatchCommentCreated,
   dispatchPostStatusChanged,
@@ -523,6 +524,8 @@ export async function getCommentsByPost(
     isTeamMember: comment.isTeamMember,
     isPrivate: comment.isPrivate,
     createdAt: comment.createdAt,
+    deletedAt: comment.deletedAt ?? null,
+    deletedByPrincipalId: comment.deletedByPrincipalId ?? null,
     statusChange: toStatusChange(comment.statusChangeFrom, comment.statusChangeTo),
     reactions: comment.reactions.map((r) => ({
       emoji: r.emoji,
@@ -854,18 +857,19 @@ export async function softDeleteComment(
 
   // Atomic transaction: soft-delete comment + decrement comment count + auto-unpin
   // Guard: only update comments that aren't already soft-deleted (idempotent)
-  await db.transaction(async (tx) => {
+  const wasDeleted = await db.transaction(async (tx) => {
     const [updatedComment] = await tx
       .update(comments)
       .set({
         deletedAt: new Date(),
+        deletedByPrincipalId: actor.principalId,
       })
       .where(and(eq(comments.id, commentId), isNull(comments.deletedAt)))
       .returning()
 
     if (!updatedComment) {
       // Already soft-deleted or gone — no-op
-      return
+      return false
     }
 
     // Decrement comment count (only for public comments) and auto-unpin if this comment was pinned
@@ -884,6 +888,89 @@ export async function softDeleteComment(
         })
         .where(eq(posts.id, comment.postId))
     }
+
+    return true
+  })
+
+  if (!wasDeleted) return
+
+  // Record activity (fire-and-forget)
+  const isSelfDelete = actor.principalId === comment.principalId
+  createActivity({
+    postId: comment.postId,
+    principalId: actor.principalId,
+    type: isSelfDelete ? 'comment.deleted' : 'comment.removed',
+    metadata: {
+      commentId,
+      commentAuthorPrincipalId: comment.principalId,
+    },
+  })
+}
+
+/**
+ * Restore a soft-deleted comment
+ * Only team members can restore comments.
+ *
+ * @param commentId - Comment ID to restore
+ * @param actor - Actor information with principalId and role
+ */
+export async function restoreComment(
+  commentId: CommentId,
+  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user' }
+): Promise<void> {
+  console.log(`[domain:comments] restoreComment: commentId=${commentId}`)
+
+  if (!isTeamMember(actor.role)) {
+    throw new ForbiddenError('UNAUTHORIZED', 'Only team members can restore comments')
+  }
+
+  const comment = await db.query.comments.findFirst({
+    where: eq(comments.id, commentId),
+    with: { post: true },
+  })
+
+  if (!comment) {
+    throw new NotFoundError('COMMENT_NOT_FOUND', `Comment with ID ${commentId} not found`)
+  }
+
+  if (!comment.deletedAt) {
+    throw new ValidationError('NOT_DELETED', 'Comment is not deleted')
+  }
+
+  // Atomic transaction: restore comment + re-increment comment count
+  const wasRestored = await db.transaction(async (tx) => {
+    const [updatedComment] = await tx
+      .update(comments)
+      .set({
+        deletedAt: null,
+        deletedByPrincipalId: null,
+      })
+      .where(and(eq(comments.id, commentId), sql`${comments.deletedAt} IS NOT NULL`))
+      .returning()
+
+    if (!updatedComment) return false
+
+    // Re-increment comment count (only for public comments)
+    if (!comment.isPrivate) {
+      await tx
+        .update(posts)
+        .set({ commentCount: sql`${posts.commentCount} + 1` })
+        .where(eq(posts.id, comment.postId))
+    }
+
+    return true
+  })
+
+  if (!wasRestored) return
+
+  createActivity({
+    postId: comment.postId,
+    principalId: actor.principalId,
+    type: 'comment.restored',
+    metadata: {
+      commentId,
+      commentAuthorPrincipalId: comment.principalId,
+    },
   })
 }
 
