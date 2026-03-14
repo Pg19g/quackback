@@ -19,7 +19,6 @@ import { CheckIcon, LockClosedIcon, LockOpenIcon } from '@heroicons/react/24/sol
 import { signOut } from '@/lib/server/auth/client'
 import { useRouter, useRouteContext } from '@tanstack/react-router'
 import { useAuthBroadcast } from '@/lib/client/hooks/use-auth-broadcast'
-import { useAuthPopoverSafe } from '@/components/auth/auth-popover-context'
 import { cn } from '@/lib/shared/utils'
 import type { PostId, CommentId } from '@quackback/ids'
 
@@ -74,8 +73,6 @@ export function CommentForm({
   const [selectedStatusId, setSelectedStatusId] = useState<string | null>(null)
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false)
   const [isPrivate, setIsPrivate] = useState(defaultPrivate ?? false)
-
-  const authPopover = useAuthPopoverSafe()
 
   // Get user from session
   // Note: principalId is only available from the server-provided `user` prop, not from client session
@@ -140,23 +137,11 @@ export function CommentForm({
     )
   }
 
-  // If not authenticated, show sign-in prompt
-  if (!effectiveUser) {
-    return (
-      <div className="flex items-center justify-center py-4 px-4 bg-muted/30 [border-radius:var(--radius)] border border-border/30">
-        <p className="text-sm text-muted-foreground mr-3">Sign in to comment</p>
-        {authPopover && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => authPopover.openAuthPopover({ mode: 'login' })}
-          >
-            Sign in
-          </Button>
-        )}
-      </div>
-    )
-  }
+  // If not authenticated and the form was rendered (allowCommenting=true from parent),
+  // show the form for anonymous commenting. The anonymous session is created on submit.
+  // Only show sign-in prompt if the parent explicitly didn't render a form (this code
+  // path is reached only for edge cases — normally CommentThread handles the locked state).
+  const isAnonymousCommenter = !effectiveUser || (session?.user?.isAnonymous ?? false)
 
   // Team member composer: unified card with toolbar
   if (showStatusSelector) {
@@ -192,7 +177,7 @@ export function CommentForm({
               {/* Left: Identity */}
               <p className="text-xs text-muted-foreground mr-auto truncate">
                 <span className="font-medium text-foreground">
-                  {effectiveUser.name || effectiveUser.email}
+                  {effectiveUser?.name || effectiveUser?.email || 'Anonymous'}
                 </span>
               </p>
 
@@ -366,27 +351,33 @@ export function CommentForm({
 
         <div className="flex items-center justify-end gap-2">
           <p className="text-xs text-muted-foreground mr-auto">
-            Posting as{' '}
-            <span className="font-medium text-foreground">
-              {effectiveUser.name || effectiveUser.email}
-            </span>
-            {' ('}
-            <button
-              type="button"
-              className="text-primary hover:underline"
-              onClick={() => {
-                signOut({
-                  fetchOptions: {
-                    onSuccess: () => {
-                      router.invalidate()
-                    },
-                  },
-                })
-              }}
-            >
-              sign out
-            </button>
-            {')'}
+            {isAnonymousCommenter ? (
+              'Posting anonymously'
+            ) : (
+              <>
+                Posting as{' '}
+                <span className="font-medium text-foreground">
+                  {effectiveUser?.name || effectiveUser?.email}
+                </span>
+                {' ('}
+                <button
+                  type="button"
+                  className="text-primary hover:underline"
+                  onClick={() => {
+                    signOut({
+                      fetchOptions: {
+                        onSuccess: () => {
+                          router.invalidate()
+                        },
+                      },
+                    })
+                  }}
+                >
+                  sign out
+                </button>
+                {')'}
+              </>
+            )}
           </p>
           {onCancel && (
             <Button

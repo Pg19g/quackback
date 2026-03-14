@@ -16,7 +16,7 @@ import {
 import { tiptapContentSchema } from '@/lib/shared/schemas/posts'
 import { sanitizeTiptapContent } from '@/lib/server/sanitize-tiptap'
 import { getRequestHeaders } from '@tanstack/react-start/server'
-import { getOptionalAuth, requireAuth, hasSessionCookie } from './auth-helpers'
+import { getOptionalAuth, requireAuth, hasAuthCredentials } from './auth-helpers'
 import { getSettings } from './workspace'
 import {
   listPublicPosts,
@@ -174,7 +174,7 @@ export const getPostPermissionsFn = createServerFn({ method: 'GET' })
       console.log(`[fn:public-posts] getPostPermissionsFn: postId=${data.postId}`)
       try {
         // Early bailout: no session cookie = no permissions (skip DB queries)
-        if (!hasSessionCookie()) {
+        if (!hasAuthCredentials()) {
           console.log(`[fn:public-posts] getPostPermissionsFn: no session cookie, skipping auth`)
           return { canEdit: false, canDelete: false }
         }
@@ -342,15 +342,25 @@ export const createPublicPostFn = createServerFn({ method: 'POST' })
         throw new Error('Board not found')
       }
       if (!principalRecord) {
-        throw new Error('You must be a member to submit feedback.')
+        // Anonymous users may not have a member record from getMemberByUser,
+        // but they do have a principal record. Check if anonymous posting is enabled.
+        if (ctx.principal.type === 'anonymous') {
+          const { getPortalConfig } = await import('@/lib/server/domains/settings/settings.service')
+          const config = await getPortalConfig()
+          if (!config.features.anonymousPosting) {
+            throw new Error('Anonymous posting is not enabled')
+          }
+        } else {
+          throw new Error('You must be a member to submit feedback.')
+        }
       }
       if (!settings) {
         throw new Error('Organization settings not found')
       }
 
-      // Build author info
+      // Build author info (use ctx.principal for anonymous users who don't have a member record)
       const author = {
-        principalId: principalRecord.id as PrincipalId,
+        principalId: (principalRecord?.id ?? ctx.principal.id) as PrincipalId,
         userId: ctx.user.id as UserId,
         name: ctx.user.name || ctx.user.email,
         email: ctx.user.email,
@@ -395,7 +405,7 @@ export const getVotedPostsFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ votedPostIds: string[] }> => {
     console.log(`[fn:public-posts] getVotedPostsFn`)
     try {
-      if (!hasSessionCookie()) {
+      if (!hasAuthCredentials()) {
         console.log(`[fn:public-posts] getVotedPostsFn: no session cookie, skipping auth`)
         return { votedPostIds: [] }
       }
@@ -532,7 +542,7 @@ export const getVoteSidebarDataFn = createServerFn({ method: 'GET' })
       const noSub = { subscribed: false, level: 'none' as const, reason: null }
 
       // No session cookie — check if anonymous voting is enabled
-      if (!hasSessionCookie()) {
+      if (!hasAuthCredentials()) {
         const settings = await getSettings()
         const parsed =
           typeof settings?.portalConfig === 'string'
@@ -556,6 +566,18 @@ export const getVoteSidebarDataFn = createServerFn({ method: 'GET' })
       }
 
       const isAnonymous = ctx.principal.type === 'anonymous'
+
+      // Re-check anonymousVoting setting for existing anonymous sessions
+      let canVote = true
+      if (isAnonymous) {
+        const settings = await getSettings()
+        const parsed =
+          typeof settings?.portalConfig === 'string'
+            ? JSON.parse(settings.portalConfig)
+            : settings?.portalConfig
+        canVote = parsed?.features?.anonymousVoting ?? true
+      }
+
       const { hasVoted, subscription } = await getVoteAndSubscriptionStatus(
         postId,
         ctx.principal.id
@@ -566,7 +588,7 @@ export const getVoteSidebarDataFn = createServerFn({ method: 'GET' })
       )
       return {
         isMember: !isAnonymous,
-        canVote: true,
+        canVote,
         hasVoted,
         subscriptionStatus: isAnonymous
           ? noSub

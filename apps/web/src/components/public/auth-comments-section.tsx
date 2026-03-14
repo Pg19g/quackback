@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter, useRouteContext } from '@tanstack/react-router'
 import { CommentThread } from './comment-thread'
 import { useAuthPopoverSafe } from '@/components/auth/auth-popover-context'
 import { useAuthBroadcast } from '@/lib/client/hooks/use-auth-broadcast'
+import { useEnsureAnonSession } from '@/lib/client/hooks/use-ensure-anon-session'
 import { useCreateComment } from '@/lib/client/mutations'
 import type { PublicCommentView } from '@/lib/client/queries/portal-detail'
 import type { CommentId, PostId, PrincipalId } from '@quackback/ids'
@@ -35,6 +37,14 @@ interface AuthCommentsSectionProps {
   isTeamMember?: boolean
   /** Hide the comment form area entirely (for readonly previews) */
   hideCommentForm?: boolean
+  /** Callback when a comment is deleted */
+  onDeleteComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being deleted */
+  deletingCommentId?: CommentId | null
+  /** Callback when a comment is restored (team only) */
+  onRestoreComment?: (commentId: CommentId) => void
+  /** ID of the comment currently being restored */
+  restoringCommentId?: CommentId | null
 }
 
 /**
@@ -59,6 +69,10 @@ export function AuthCommentsSection({
   currentStatusId,
   isTeamMember,
   hideCommentForm,
+  onDeleteComment,
+  deletingCommentId,
+  onRestoreComment,
+  restoringCommentId,
 }: AuthCommentsSectionProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -77,23 +91,57 @@ export function AuthCommentsSection({
     },
   })
 
-  // Get user from session (anonymous sessions can vote but can't comment)
-  const user = session?.user && !session.user.isAnonymous ? session.user : null
+  // Check if anonymous commenting is enabled in workspace settings
+  const anonymousCommentingEnabled =
+    settings?.publicPortalConfig?.features?.anonymousCommenting ?? false
+
+  // Get user from session (anonymous sessions can comment only if the setting is enabled)
+  const isAnonymous = session?.user?.isAnonymous ?? false
+  const user = session?.user && (!isAnonymous || anonymousCommentingEnabled) ? session.user : null
   const isLoggedIn = !!user
 
-  // Can comment only if logged in (reactive check)
-  const allowCommenting = isLoggedIn && serverAllowCommenting
+  // Can comment if: logged in with server permission, OR anonymous commenting is enabled
+  // (even without a session — the session will be created lazily on comment submit)
+  const allowCommenting = (isLoggedIn && serverAllowCommenting) || anonymousCommentingEnabled
 
   // User info from session, falling back to server-provided user
   const userData = user
     ? { name: user.name ?? null, email: user.email ?? '', principalId: serverUser?.principalId }
     : serverUser
 
+  const ensureAnonSession = useEnsureAnonSession()
+
   // Use mutation hook with optimistic updates
-  const createComment = useCreateComment({
+  const baseMutation = useCreateComment({
     postId,
     author: userData,
   })
+
+  // Wrap mutation to lazily create anonymous session before commenting
+  const createComment = useMemo(() => {
+    if (!anonymousCommentingEnabled) return baseMutation
+    return {
+      ...baseMutation,
+      mutate: (
+        input: Parameters<typeof baseMutation.mutate>[0],
+        options?: Parameters<typeof baseMutation.mutate>[1]
+      ) => {
+        ensureAnonSession()
+          .then((ok) => {
+            if (ok) baseMutation.mutate(input, options)
+          })
+          .catch(() => {})
+      },
+      mutateAsync: async (
+        input: Parameters<typeof baseMutation.mutateAsync>[0],
+        options?: Parameters<typeof baseMutation.mutateAsync>[1]
+      ) => {
+        const ok = await ensureAnonSession()
+        if (!ok) throw new Error('Failed to create session')
+        return baseMutation.mutateAsync(input, options)
+      },
+    } as typeof baseMutation
+  }, [anonymousCommentingEnabled, baseMutation, ensureAnonSession])
 
   return (
     <CommentThread
@@ -114,6 +162,10 @@ export function AuthCommentsSection({
       currentStatusId={currentStatusId}
       isTeamMember={isTeamMember}
       hideCommentForm={hideCommentForm}
+      onDeleteComment={onDeleteComment}
+      deletingCommentId={deletingCommentId}
+      onRestoreComment={onRestoreComment}
+      restoringCommentId={restoringCommentId}
     />
   )
 }

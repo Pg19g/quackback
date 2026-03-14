@@ -1,7 +1,5 @@
-import { useCallback, useRef } from 'react'
-import { useRouter } from '@tanstack/react-router'
 import { useAuthPopover } from '@/components/auth/auth-popover-context'
-import { authClient } from '@/lib/server/auth/client'
+import { useEnsureAnonSession } from '@/lib/client/hooks/use-ensure-anon-session'
 import { VoteButton } from './vote-button'
 import type { PostId } from '@quackback/ids'
 
@@ -14,6 +12,8 @@ interface AuthVoteButtonProps {
   canVote?: boolean
   /** Compact horizontal variant for inline use */
   compact?: boolean
+  /** Pill variant — vertical, self-stretches to parent height */
+  pill?: boolean
 }
 
 /**
@@ -26,36 +26,14 @@ export function AuthVoteButton({
   disabled = false,
   canVote = false,
   compact = false,
+  pill = false,
 }: AuthVoteButtonProps): React.ReactElement {
-  const router = useRouter()
   const { openAuthPopover } = useAuthPopover()
-  const hasSessionRef = useRef(false)
+  const ensureAnonSession = useEnsureAnonSession()
 
   function handleAuthRequired(): void {
     openAuthPopover({ mode: 'login' })
   }
-
-  // Called before each vote — ensures an anonymous session exists
-  const handleBeforeVote = useCallback(async (): Promise<boolean> => {
-    if (!canVote) return true
-    if (hasSessionRef.current) return true
-    try {
-      const result = await authClient.signIn.anonymous()
-      if (result.error) {
-        console.error('[auth-vote-button] Anonymous sign-in failed:', result.error)
-        return false
-      }
-      hasSessionRef.current = true
-      // Let the browser commit the session cookie before the vote fires
-      await new Promise((r) => setTimeout(r, 0))
-      // Refresh session state so the header updates to show logged-in avatar
-      router.invalidate()
-      return true
-    } catch (error) {
-      console.error('[auth-vote-button] Anonymous sign-in failed:', error)
-      return false
-    }
-  }, [canVote, router])
 
   return (
     <VoteButton
@@ -63,8 +41,9 @@ export function AuthVoteButton({
       voteCount={voteCount}
       disabled={disabled}
       onAuthRequired={disabled ? handleAuthRequired : undefined}
-      onBeforeVote={canVote ? handleBeforeVote : undefined}
+      onBeforeVote={canVote ? ensureAnonSession : undefined}
       compact={compact}
+      pill={pill}
     />
   )
 }

@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Link, useRouter } from '@tanstack/react-router'
+import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
   ChevronUpIcon,
   ChatBubbleLeftIcon,
@@ -27,7 +27,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { PostStatusEntity } from '@/lib/shared/db-types'
 import { usePostVote } from '@/lib/client/hooks/use-post-vote'
 import { cn, getInitials } from '@/lib/shared/utils'
-import { authClient } from '@/lib/server/auth/client'
+import { useEnsureAnonSession } from '@/lib/client/hooks/use-ensure-anon-session'
 import type { PostId, StatusId } from '@quackback/ids'
 
 interface PostCardProps {
@@ -114,7 +114,7 @@ export function PostCard({
   showAvatar = true,
 }: PostCardProps): React.ReactElement {
   // Safe hook - returns null in admin context where AuthPopoverProvider isn't available
-  const router = useRouter()
+
   const authPopover = useAuthPopoverSafe()
   const isAdminMode = canChangeStatus || !!onClick
   const currentStatus = statuses.find((s) => s.id === statusId)
@@ -129,7 +129,7 @@ export function PostCard({
   } = usePostVote({ postId: id, voteCount })
 
   const [isAnonSigningIn, setIsAnonSigningIn] = useState(false)
-  const hasAnonSessionRef = useRef(false)
+  const ensureAnonSession = useEnsureAnonSession()
 
   async function handleVoteClick(e: React.MouseEvent): Promise<void> {
     e.stopPropagation()
@@ -142,25 +142,12 @@ export function PostCard({
       // Anonymous voting: sign in silently, then vote
       e.preventDefault()
       if (isAnonSigningIn) return
-      if (!hasAnonSessionRef.current) {
-        setIsAnonSigningIn(true)
-        try {
-          const result = await authClient.signIn.anonymous()
-          if (result.error) {
-            console.error('[post-card] Anonymous sign-in failed:', result.error)
-            return
-          }
-          hasAnonSessionRef.current = true
-          // Let the browser commit the session cookie before firing the vote
-          await new Promise((r) => setTimeout(r, 0))
-          // Refresh session state so the header updates to show logged-in avatar
-          router.invalidate()
-        } catch (error) {
-          console.error('[post-card] Anonymous sign-in failed:', error)
-          return
-        } finally {
-          setIsAnonSigningIn(false)
-        }
+      setIsAnonSigningIn(true)
+      try {
+        const ok = await ensureAnonSession()
+        if (!ok) return
+      } finally {
+        setIsAnonSigningIn(false)
       }
       handleVote()
       return
