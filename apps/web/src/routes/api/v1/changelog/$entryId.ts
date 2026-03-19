@@ -13,7 +13,7 @@ import {
   updateChangelog,
   deleteChangelog,
 } from '@/lib/server/domains/changelog/changelog.service'
-import { publishedAtToPublishState } from '@/lib/shared/schemas/changelog'
+import type { PublishState } from '@/lib/shared/schemas/changelog'
 import type { ChangelogId } from '@quackback/ids'
 
 // Input validation schema
@@ -88,12 +88,24 @@ export const Route = createFileRoute('/api/v1/changelog/$entryId')({
             })
           }
 
+          // Convert publishedAt to PublishState, preserving exact timestamps
+          let publishState: PublishState | undefined
+          if (parsed.data.publishedAt !== undefined) {
+            if (parsed.data.publishedAt === null) {
+              publishState = { type: 'draft' }
+            } else {
+              const publishDate = new Date(parsed.data.publishedAt)
+              publishState =
+                publishDate > new Date()
+                  ? { type: 'scheduled', publishAt: publishDate }
+                  : { type: 'published', publishAt: publishDate }
+            }
+          }
+
           const updated = await updateChangelog(entryId as ChangelogId, {
             title: parsed.data.title,
             content: parsed.data.content,
-            ...(parsed.data.publishedAt !== undefined && {
-              publishState: publishedAtToPublishState(parsed.data.publishedAt ?? undefined),
-            }),
+            ...(publishState && { publishState }),
           })
 
           return successResponse(formatChangelogResponse(updated))

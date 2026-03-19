@@ -13,7 +13,7 @@ import { tiptapContentSchema } from './posts'
 export const publishStateSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('draft') }),
   z.object({ type: z.literal('scheduled'), publishAt: z.coerce.date() }),
-  z.object({ type: z.literal('published') }),
+  z.object({ type: z.literal('published'), publishAt: z.coerce.date().optional() }),
 ])
 
 /**

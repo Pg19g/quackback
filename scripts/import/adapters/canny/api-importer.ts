@@ -330,9 +330,9 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     )
   }
 
-  // Step 8: Import notes
+  // Step 8: Import notes as private comments
   if (data.notes.length > 0) {
-    progress.start(`Importing ${data.notes.length} notes`)
+    progress.start(`Importing ${data.notes.length} notes as private comments`)
 
     for (let i = 0; i < data.notes.length; i++) {
       const note = data.notes[i]
@@ -343,8 +343,9 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
           continue
         }
 
-        await qb.post(`/api/v1/posts/${postId}/notes`, {
+        await qb.post(`/api/v1/posts/${postId}/comments`, {
           content: note.body,
+          isPrivate: true,
           ...(note.createdAt && { createdAt: new Date(note.createdAt).toISOString() }),
         })
 

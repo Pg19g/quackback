@@ -137,9 +137,9 @@ export async function updateChangelog(
   id: ChangelogId,
   input: UpdateChangelogInput
 ): Promise<ChangelogEntryWithDetails> {
-  // Get existing entry
+  // Get existing entry (exclude soft-deleted)
   const existing = await db.query.changelogEntries.findFirst({
-    where: eq(changelogEntries.id, id),
+    where: and(eq(changelogEntries.id, id), isNull(changelogEntries.deletedAt)),
   })
   if (!existing) {
     throw new NotFoundError('CHANGELOG_NOT_FOUND', `Changelog entry with ID ${id} not found`)
@@ -257,9 +257,9 @@ export async function deleteChangelog(id: ChangelogId): Promise<void> {
  * @returns Changelog entry with details
  */
 export async function getChangelogById(id: ChangelogId): Promise<ChangelogEntryWithDetails> {
-  // Get the changelog entry
+  // Get the changelog entry (exclude soft-deleted)
   const entry = await db.query.changelogEntries.findFirst({
-    where: eq(changelogEntries.id, id),
+    where: and(eq(changelogEntries.id, id), isNull(changelogEntries.deletedAt)),
   })
 
   if (!entry) {
@@ -732,7 +732,7 @@ function getPublishedAtFromState(state: PublishState): Date | null {
     case 'scheduled':
       return state.publishAt
     case 'published':
-      return new Date()
+      return state.publishAt ?? new Date()
   }
 }
 
