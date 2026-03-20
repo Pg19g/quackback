@@ -15,7 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { CheckIcon, LockClosedIcon, LockOpenIcon } from '@heroicons/react/24/solid'
+import { CheckIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { signOut } from '@/lib/server/auth/client'
 import { useRouter, useRouteContext } from '@tanstack/react-router'
 import { useAuthBroadcast } from '@/lib/client/hooks/use-auth-broadcast'
@@ -100,7 +100,10 @@ export function CommentForm({
   const currentStatus = statuses?.find((s) => s.id === currentStatusId) ?? null
   const showStatusSelector = isTeamMember && !parentId && statuses && statuses.length > 0
 
+  const isPrivateLocked = defaultPrivate === true
+
   function privateTooltipText(): string {
+    if (isPrivateLocked) return 'Replies to private comments are always private'
     if (isPrivate) return 'Only visible to team members'
     return 'Make this comment private (team-only)'
   }
@@ -277,18 +280,16 @@ export function CommentForm({
                     <button
                       type="button"
                       onClick={() => setIsPrivate(!isPrivate)}
+                      disabled={isPrivateLocked}
                       className={cn(
                         'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors',
                         isPrivate
                           ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/80',
+                        isPrivateLocked && 'opacity-70 cursor-not-allowed'
                       )}
                     >
-                      {isPrivate ? (
-                        <LockClosedIcon className="h-3 w-3" />
-                      ) : (
-                        <LockOpenIcon className="h-3 w-3" />
-                      )}
+                      <LockClosedIcon className="h-3 w-3" />
                       Private
                     </button>
                   </TooltipTrigger>
@@ -400,17 +401,15 @@ export function CommentForm({
                     variant={isPrivate ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setIsPrivate(!isPrivate)}
-                    className={
+                    disabled={isPrivateLocked}
+                    className={cn(
                       isPrivate
                         ? 'bg-amber-500 hover:bg-amber-600 text-white border-0 gap-1.5'
-                        : 'text-muted-foreground gap-1.5'
-                    }
-                  >
-                    {isPrivate ? (
-                      <LockClosedIcon className="h-3.5 w-3.5" />
-                    ) : (
-                      <LockOpenIcon className="h-3.5 w-3.5" />
+                        : 'text-muted-foreground gap-1.5',
+                      isPrivateLocked && 'opacity-70 cursor-not-allowed'
                     )}
+                  >
+                    <LockClosedIcon className="h-3.5 w-3.5" />
                     Private
                   </Button>
                 </TooltipTrigger>

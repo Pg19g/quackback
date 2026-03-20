@@ -37,6 +37,8 @@ import { subscribeToPost } from '@/lib/server/domains/subscriptions/subscription
 import { createActivity } from '@/lib/server/domains/activity/activity.service'
 import {
   dispatchCommentCreated,
+  dispatchCommentUpdated,
+  dispatchCommentDeleted,
   dispatchPostStatusChanged,
   buildEventActor,
 } from '@/lib/server/events/dispatch'
@@ -311,7 +313,7 @@ export async function createComment(
 export async function updateComment(
   id: CommentId,
   input: UpdateCommentInput,
-  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user' }
+  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user'; userId?: UserId }
 ): Promise<Comment> {
   console.log(`[domain:comments] updateComment: id=${id}`)
   // Get existing comment with post and board in single query
@@ -362,6 +364,24 @@ export async function updateComment(
     throw new NotFoundError('COMMENT_NOT_FOUND', `Comment with ID ${id} not found`)
   }
 
+  // Dispatch comment.updated event for webhooks and integrations
+  const post = existingComment.post
+  const board = post.board
+  dispatchCommentUpdated(
+    buildEventActor({ principalId: actor.principalId, userId: actor.userId }),
+    {
+      id: updatedComment.id,
+      content: updatedComment.content,
+      isPrivate: updatedComment.isPrivate ?? undefined,
+    },
+    {
+      id: post.id,
+      title: post.title,
+      boardId: board.id,
+      boardSlug: board.slug,
+    }
+  )
+
   return updatedComment
 }
 
@@ -380,7 +400,7 @@ export async function updateComment(
  */
 export async function deleteComment(
   id: CommentId,
-  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user' }
+  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user'; userId?: UserId }
 ): Promise<void> {
   console.log(`[domain:comments] deleteComment: id=${id}`)
   // Get existing comment with post and board in single query
@@ -426,6 +446,23 @@ export async function deleteComment(
         .where(eq(posts.id, existingComment.postId))
     }
   })
+
+  // Dispatch comment.deleted event for webhooks and integrations
+  const post = existingComment.post
+  const board = post.board
+  dispatchCommentDeleted(
+    buildEventActor({ principalId: actor.principalId, userId: actor.userId }),
+    {
+      id,
+      isPrivate: existingComment.isPrivate ?? undefined,
+    },
+    {
+      id: post.id,
+      title: post.title,
+      boardId: board.id,
+      boardSlug: board.slug,
+    }
+  )
 }
 
 /**

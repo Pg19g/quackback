@@ -8,6 +8,7 @@ import type { PostId, PrincipalId } from '@quackback/ids'
 // --- Mock tracking ---
 const mockPostsFindFirst = vi.fn()
 const mockPrincipalFindFirst = vi.fn()
+const mockBoardsFindFirst = vi.fn()
 const mockDbUpdate = vi.fn()
 const mockDbExecute = vi.fn()
 const createActivity = vi.fn()
@@ -28,6 +29,7 @@ vi.mock('@/lib/server/db', async () => {
       query: {
         posts: { findFirst: (...args: unknown[]) => mockPostsFindFirst(...args) },
         principal: { findFirst: (...args: unknown[]) => mockPrincipalFindFirst(...args) },
+        boards: { findFirst: (...args: unknown[]) => mockBoardsFindFirst(...args) },
       },
       update: (..._args: unknown[]) => {
         mockDbUpdate(..._args)
@@ -52,6 +54,12 @@ vi.mock('@/lib/server/domains/activity/activity.service', () => ({
 
 vi.mock('@/lib/server/events/scheduler', () => ({
   scheduleDispatch: (...args: unknown[]) => scheduleDispatch(...args),
+}))
+
+vi.mock('@/lib/server/events/dispatch', () => ({
+  dispatchPostMerged: vi.fn(),
+  dispatchPostUnmerged: vi.fn(),
+  buildEventActor: vi.fn((actor) => actor),
 }))
 
 vi.mock('@/lib/server/utils', () => ({
@@ -90,6 +98,7 @@ function mockPost(overrides: Record<string, unknown> = {}) {
     canonicalPostId: null,
     deletedAt: null,
     principalId: 'principal_author',
+    boardId: 'board_mock',
     ...overrides,
   }
 }
@@ -102,6 +111,7 @@ describe('mergePost', () => {
       return Promise.resolve(mockPost())
     })
     mockPrincipalFindFirst.mockResolvedValue({ displayName: 'Author' })
+    mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
     // Default: vote count recalculation returns 5
     mockDbExecute.mockResolvedValue([{ unique_voters: 5 }])
   })
@@ -198,11 +208,30 @@ describe('mergePost', () => {
       duplicatePost: { id: POST_A },
     })
   })
+
+  it('dispatches post.merged event with board data', async () => {
+    const { dispatchPostMerged } = await import('@/lib/server/events/dispatch')
+    mockPostsFindFirst
+      .mockResolvedValueOnce(mockPost({ id: POST_A, title: 'Dup', boardId: 'board_a' }))
+      .mockResolvedValueOnce(mockPost({ id: POST_B, title: 'Canon', boardId: 'board_b' }))
+    mockBoardsFindFirst
+      .mockResolvedValueOnce({ slug: 'board-a' })
+      .mockResolvedValueOnce({ slug: 'board-b' })
+
+    await mergePost(POST_A, POST_B, ACTOR)
+
+    expect(dispatchPostMerged).toHaveBeenCalledWith(
+      expect.objectContaining({ principalId: ACTOR }),
+      expect.objectContaining({ id: POST_A, title: 'Dup', boardId: 'board_a', boardSlug: 'board-a' }),
+      expect.objectContaining({ id: POST_B, title: 'Canon', boardId: 'board_b', boardSlug: 'board-b' })
+    )
+  })
 })
 
 describe('unmergePost', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
     mockDbExecute.mockResolvedValue([{ unique_voters: 3 }])
   })
 
@@ -252,5 +281,23 @@ describe('unmergePost', () => {
       post: { id: POST_A },
       canonicalPost: { id: POST_B, voteCount: 3 },
     })
+  })
+
+  it('dispatches post.unmerged event with board data', async () => {
+    const { dispatchPostUnmerged } = await import('@/lib/server/events/dispatch')
+    mockPostsFindFirst
+      .mockResolvedValueOnce(mockPost({ id: POST_A, canonicalPostId: POST_B, title: 'Dup', boardId: 'board_a' }))
+      .mockResolvedValueOnce(mockPost({ id: POST_B, title: 'Canon', boardId: 'board_b' }))
+    mockBoardsFindFirst
+      .mockResolvedValueOnce({ slug: 'board-a' })
+      .mockResolvedValueOnce({ slug: 'board-b' })
+
+    await unmergePost(POST_A, ACTOR)
+
+    expect(dispatchPostUnmerged).toHaveBeenCalledWith(
+      expect.objectContaining({ principalId: ACTOR }),
+      expect.objectContaining({ id: POST_A, boardId: 'board_a' }),
+      expect.objectContaining({ id: POST_B, boardId: 'board_b' })
+    )
   })
 })

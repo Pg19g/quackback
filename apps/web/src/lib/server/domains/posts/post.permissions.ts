@@ -7,6 +7,7 @@
 import {
   db,
   posts,
+  boards,
   comments,
   postEditHistory,
   eq,
@@ -15,11 +16,16 @@ import {
   isNull,
   type Post,
 } from '@/lib/server/db'
-import { toUuid, type PostId, type PrincipalId, type StatusId } from '@quackback/ids'
+import { toUuid, type PostId, type PrincipalId, type StatusId, type UserId } from '@quackback/ids'
 import { getExecuteRows } from '@/lib/server/utils'
 import { NotFoundError, ValidationError, ForbiddenError } from '@/lib/shared/errors'
 import { isTeamMember } from '@/lib/shared/roles'
 import { createActivity } from '@/lib/server/domains/activity/activity.service'
+import {
+  dispatchPostDeleted,
+  dispatchPostRestored,
+  buildEventActor,
+} from '@/lib/server/events/dispatch'
 import { DEFAULT_PORTAL_CONFIG, type PortalConfig } from '@/lib/server/domains/settings'
 import type { PermissionCheckResult, UserEditPostInput } from './post.types'
 
@@ -403,7 +409,7 @@ export async function userEditPost(
  */
 export async function softDeletePost(
   postId: PostId,
-  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user' }
+  actor: { principalId: PrincipalId; role: 'admin' | 'member' | 'user'; userId?: UserId }
 ): Promise<void> {
   console.log(
     `[domain:post-permissions] softDeletePost: postId=${postId} principalId=${actor.principalId} role=${actor.role}`
@@ -476,6 +482,20 @@ export async function softDeletePost(
     principalId: actor.principalId,
     type: 'post.deleted',
   })
+
+  // Dispatch post.deleted event for webhooks and integrations
+  const board = await db.query.boards.findFirst({
+    where: eq(boards.id, existingPost.boardId),
+    columns: { slug: true },
+  })
+  if (board) {
+    dispatchPostDeleted(buildEventActor({ principalId: actor.principalId, userId: actor.userId }), {
+      id: postId,
+      title: existingPost.title,
+      boardId: existingPost.boardId,
+      boardSlug: board.slug,
+    })
+  }
 }
 
 /**
@@ -486,7 +506,7 @@ export async function softDeletePost(
  * @param postId - Post ID to restore
  * @returns Restored post
  */
-export async function restorePost(postId: PostId, actorPrincipalId?: PrincipalId): Promise<Post> {
+export async function restorePost(postId: PostId, actorPrincipalId?: PrincipalId, actorUserId?: UserId): Promise<Post> {
   console.log(`[domain:post-permissions] restorePost: postId=${postId}`)
   // Get the post first to validate it exists and is deleted
   const existingPost = await db.query.posts.findFirst({ where: eq(posts.id, postId) })
@@ -526,6 +546,22 @@ export async function restorePost(postId: PostId, actorPrincipalId?: PrincipalId
     principalId: actorPrincipalId ?? null,
     type: 'post.restored',
   })
+
+  // Dispatch post.restored event for webhooks and integrations
+  if (actorPrincipalId) {
+    const board = await db.query.boards.findFirst({
+      where: eq(boards.id, restoredPost.boardId),
+      columns: { slug: true },
+    })
+    if (board) {
+      dispatchPostRestored(buildEventActor({ principalId: actorPrincipalId, userId: actorUserId }), {
+        id: postId,
+        title: restoredPost.title,
+        boardId: restoredPost.boardId,
+        boardSlug: board.slug,
+      })
+    }
+  }
 
   return restoredPost
 }

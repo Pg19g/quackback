@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto'
 import type { BoardId, ChangelogId, CommentId, PostId, PrincipalId, UserId } from '@quackback/ids'
 
 import { processEvent } from './process'
-import type { EventActor, EventData } from './types.js'
+import type { EventActor, EventData, EventPostRef } from './types.js'
 
 // Re-export EventActor for API routes that need to construct actor objects
 export type { EventActor } from './types.js'
@@ -123,6 +123,101 @@ export async function dispatchCommentCreated(
   await dispatchEvent({
     ...eventEnvelope(actor),
     type: 'comment.created',
+    data: { comment, post },
+  })
+}
+
+export async function dispatchPostUpdated(
+  actor: EventActor,
+  post: EventPostRef,
+  changedFields: string[]
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'post.updated',
+    data: { post, changedFields },
+  })
+}
+
+export async function dispatchPostDeleted(
+  actor: EventActor,
+  post: EventPostRef
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'post.deleted',
+    data: { post },
+  })
+}
+
+export async function dispatchPostRestored(
+  actor: EventActor,
+  post: EventPostRef
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'post.restored',
+    data: { post },
+  })
+}
+
+export async function dispatchPostMerged(
+  actor: EventActor,
+  duplicatePost: EventPostRef,
+  canonicalPost: EventPostRef
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'post.merged',
+    data: { duplicatePost, canonicalPost },
+  })
+}
+
+export async function dispatchPostUnmerged(
+  actor: EventActor,
+  post: EventPostRef,
+  formerCanonicalPost: EventPostRef
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'post.unmerged',
+    data: { post, formerCanonicalPost },
+  })
+}
+
+export interface CommentUpdatedInput {
+  id: CommentId
+  content: string
+  authorEmail?: string
+  authorName?: string
+  isPrivate?: boolean
+}
+
+export async function dispatchCommentUpdated(
+  actor: EventActor,
+  comment: CommentUpdatedInput,
+  post: CommentPostInput
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'comment.updated',
+    data: { comment, post },
+  })
+}
+
+export interface CommentDeletedInput {
+  id: CommentId
+  isPrivate?: boolean
+}
+
+export async function dispatchCommentDeleted(
+  actor: EventActor,
+  comment: CommentDeletedInput,
+  post: CommentPostInput
+): Promise<void> {
+  await dispatchEvent({
+    ...eventEnvelope(actor),
+    type: 'comment.deleted',
     data: { comment, post },
   })
 }
