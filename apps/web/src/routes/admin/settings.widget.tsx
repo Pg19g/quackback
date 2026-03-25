@@ -177,8 +177,10 @@ function WidgetAppearanceControls({
   const [isPending, startTransition] = useTransition()
   const [saving, setSaving] = useState(false)
   const [defaultBoard, setDefaultBoard] = useState(config.defaultBoard ?? '')
-  const [feedbackTab, setFeedbackTab] = useState(config.tabs?.feedback ?? true)
-  const [changelogTab, setChangelogTab] = useState(config.tabs?.changelog ?? false)
+  const [widgetTabs, setWidgetTabs] = useState({
+    feedback: config.tabs?.feedback ?? true,
+    changelog: config.tabs?.changelog ?? false,
+  })
 
   async function save(updates: Record<string, unknown>) {
     setSaving(true)
@@ -244,14 +246,15 @@ function WidgetAppearanceControls({
             </div>
             <Switch
               id="tab-feedback"
-              checked={feedbackTab}
+              checked={widgetTabs.feedback}
               onCheckedChange={(checked) => {
-                if (!checked && !changelogTab) return
-                setFeedbackTab(checked)
-                onTabsChange({ feedback: checked, changelog: changelogTab })
-                save({ tabs: { feedback: checked, changelog: changelogTab } })
+                if (!checked && !widgetTabs.changelog) return
+                const next = { ...widgetTabs, feedback: checked }
+                setWidgetTabs(next)
+                onTabsChange(next)
+                save({ tabs: next })
               }}
-              disabled={isBusy || (feedbackTab && !changelogTab)}
+              disabled={isBusy || (widgetTabs.feedback && !widgetTabs.changelog)}
               aria-label="Feedback tab"
             />
           </div>
@@ -267,14 +270,15 @@ function WidgetAppearanceControls({
             </div>
             <Switch
               id="tab-changelog"
-              checked={changelogTab}
+              checked={widgetTabs.changelog}
               onCheckedChange={(checked) => {
-                if (!checked && !feedbackTab) return
-                setChangelogTab(checked)
-                onTabsChange({ feedback: feedbackTab, changelog: checked })
-                save({ tabs: { feedback: feedbackTab, changelog: checked } })
+                if (!checked && !widgetTabs.feedback) return
+                const next = { ...widgetTabs, changelog: checked }
+                setWidgetTabs(next)
+                onTabsChange(next)
+                save({ tabs: next })
               }}
-              disabled={isBusy || (changelogTab && !feedbackTab)}
+              disabled={isBusy || (widgetTabs.changelog && !widgetTabs.feedback)}
               aria-label="Changelog tab"
             />
           </div>

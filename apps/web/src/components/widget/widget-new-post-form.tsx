@@ -23,7 +23,6 @@ interface WidgetNewPostFormProps {
     board: { id: string; name: string; slug: string }
   }) => void
   anonymousPostingEnabled?: boolean
-  hmacRequired?: boolean
 }
 
 export function WidgetNewPostForm({
@@ -32,10 +31,16 @@ export function WidgetNewPostForm({
   selectedBoardSlug,
   onSuccess,
   anonymousPostingEnabled = false,
-  hmacRequired = false,
 }: WidgetNewPostFormProps) {
-  const { isIdentified, user, emitEvent, metadata, ensureSession, identifyWithEmail } =
-    useWidgetAuth()
+  const {
+    isIdentified,
+    hmacRequired,
+    user,
+    emitEvent,
+    metadata,
+    ensureSession,
+    identifyWithEmail,
+  } = useWidgetAuth()
   const canPost = isIdentified || anonymousPostingEnabled
 
   if (!canPost && hmacRequired) {

@@ -29,7 +29,6 @@ interface WidgetPostDetailProps {
   statuses: StatusInfo[]
   anonymousVotingEnabled?: boolean
   anonymousCommentingEnabled?: boolean
-  hmacRequired?: boolean
 }
 
 export function WidgetPostDetail({
@@ -37,9 +36,9 @@ export function WidgetPostDetail({
   statuses,
   anonymousVotingEnabled = true,
   anonymousCommentingEnabled = false,
-  hmacRequired = false,
 }: WidgetPostDetailProps) {
-  const { isIdentified, user, ensureSession, emitEvent, sessionVersion } = useWidgetAuth()
+  const { isIdentified, hmacRequired, user, ensureSession, emitEvent, sessionVersion } =
+    useWidgetAuth()
   const queryClient = useQueryClient()
 
   // Comment state (root-level comment form only; replies are inline in the comment list)
@@ -292,7 +291,7 @@ export function WidgetPostDetail({
 
           {(!canVote || !canComment) && !post.isCommentsLocked && !hmacRequired && (
             <div className="mb-3" data-email-capture>
-              <WidgetEmailCapture heading="Enter your email to vote and comment" compact />
+              <WidgetEmailCapture heading="Enter your email to vote and comment" />
             </div>
           )}
 

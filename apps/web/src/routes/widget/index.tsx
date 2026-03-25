@@ -73,7 +73,6 @@ export const Route = createFileRoute('/widget/')({
         feedback: settings?.publicWidgetConfig?.tabs?.feedback ?? true,
         changelog: settings?.publicWidgetConfig?.tabs?.changelog ?? false,
       },
-      hmacRequired: settings?.publicWidgetConfig?.hmacRequired ?? false,
     }
   },
   component: WidgetPage,
@@ -90,8 +89,7 @@ interface SuccessPost {
 }
 
 function WidgetPage() {
-  const { posts, statuses, boards, defaultBoard, orgSlug, features, tabs, hmacRequired } =
-    Route.useLoaderData()
+  const { posts, statuses, boards, defaultBoard, orgSlug, features, tabs } = Route.useLoaderData()
   const { isIdentified, ensureSession } = useWidgetAuth()
   const canVote = isIdentified || features.anonymousVoting
 
@@ -132,7 +130,7 @@ function WidgetPage() {
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [tabs.feedback, tabs.changelog])
 
   const handleSubmitNew = useCallback((title: string) => {
     setPrefilledTitle(title)
@@ -218,7 +216,6 @@ function WidgetPage() {
           onSubmitNew={handleSubmitNew}
           onPostSelect={handlePostSelect}
           anonymousVotingEnabled={features.anonymousVoting}
-          hmacRequired={hmacRequired}
         />
       )}
 
@@ -228,7 +225,6 @@ function WidgetPage() {
           statuses={statuses}
           anonymousVotingEnabled={features.anonymousVoting}
           anonymousCommentingEnabled={features.anonymousCommenting}
-          hmacRequired={hmacRequired}
         />
       )}
 
@@ -239,7 +235,6 @@ function WidgetPage() {
           selectedBoardSlug={selectedBoardSlug}
           onSuccess={handlePostSuccess}
           anonymousPostingEnabled={features.anonymousPosting}
-          hmacRequired={hmacRequired}
         />
       )}
 

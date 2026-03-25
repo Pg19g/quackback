@@ -26,6 +26,8 @@ interface WidgetUser {
 interface WidgetAuthContextValue {
   user: WidgetUser | null
   isIdentified: boolean
+  /** Whether HMAC verification is required (inline email capture disabled) */
+  hmacRequired: boolean
   /** Ensures a session exists (identified or anonymous). Returns true if ready. */
   ensureSession: () => Promise<boolean>
   /** Identify by email (inline capture). Returns true on success. */
@@ -160,7 +162,7 @@ export function WidgetAuthProvider({
       portalHydratedRef.current = true
       identifyWithEmail(portalUser.email, portalUser.name)
     }
-  }, [portalUser, identifyWithEmail])
+  }, [portalUser, hmacRequired])
 
   const closeWidget = useCallback(() => {
     window.parent.postMessage({ type: 'quackback:close' }, '*')
@@ -281,6 +283,7 @@ export function WidgetAuthProvider({
     () => ({
       user,
       isIdentified,
+      hmacRequired: hmacRequired ?? false,
       ensureSession,
       identifyWithEmail,
       closeWidget,

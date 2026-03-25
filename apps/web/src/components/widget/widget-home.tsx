@@ -42,7 +42,6 @@ interface WidgetHomeProps {
   onSubmitNew: (title: string) => void
   onPostSelect?: (postId: string) => void
   anonymousVotingEnabled?: boolean
-  hmacRequired?: boolean
 }
 
 interface SearchResult {
@@ -62,9 +61,8 @@ export function WidgetHome({
   onSubmitNew,
   onPostSelect,
   anonymousVotingEnabled = true,
-  hmacRequired = false,
 }: WidgetHomeProps) {
-  const { ensureSession, isIdentified } = useWidgetAuth()
+  const { ensureSession, isIdentified, hmacRequired } = useWidgetAuth()
   const inputRef = useRef<HTMLInputElement>(null)
   const canVote = isIdentified || anonymousVotingEnabled
 
