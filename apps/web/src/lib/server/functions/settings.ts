@@ -8,18 +8,16 @@ import {
 } from '@/lib/server/domains/settings'
 import { userIdSchema, type UserId } from '@quackback/ids'
 import {
-  getBrandingConfig,
   getPortalConfig,
   getPublicPortalConfig,
   getPublicAuthConfig,
-  updateBrandingConfig,
   updatePortalConfig,
   getDeveloperConfig,
   updateDeveloperConfig,
-  getWidgetConfig,
-  updateWidgetConfig,
-  getWidgetSecret,
-  regenerateWidgetSecret,
+} from '@/lib/server/domains/settings/settings.service'
+import {
+  getBrandingConfig,
+  updateBrandingConfig,
   saveLogoKey,
   deleteLogoKey,
   saveHeaderLogoKey,
@@ -29,7 +27,13 @@ import {
   updateWorkspaceName,
   getCustomCss,
   updateCustomCss,
-} from '@/lib/server/domains/settings/settings.service'
+} from '@/lib/server/domains/settings/settings.media'
+import {
+  getWidgetConfig,
+  updateWidgetConfig,
+  getWidgetSecret,
+  regenerateWidgetSecret,
+} from '@/lib/server/domains/settings/settings.widget'
 import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
 import { requireAuth } from './auth-helpers'
 import { getSession } from './auth'

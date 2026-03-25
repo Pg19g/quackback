@@ -12,7 +12,7 @@ interface ChangelogFormFieldsProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<any>
   contentJson: JSONContent | null
-  onContentChange: (json: JSONContent) => void
+  onContentChange: (json: JSONContent, html: string, markdown: string) => void
   error?: string
 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MagnifyingGlassIcon, Squares2X2Icon, XMarkIcon } from '@heroicons/react/24/solid'
-import { LightBulbIcon } from '@heroicons/react/24/outline'
+import { LightBulbIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/shared/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { WidgetVoteButton } from './widget-vote-button'
@@ -62,7 +62,7 @@ export function WidgetHome({
   onPostSelect,
   anonymousVotingEnabled = true,
 }: WidgetHomeProps) {
-  const { closeWidget, ensureSession, isIdentified } = useWidgetAuth()
+  const { ensureSession, isIdentified } = useWidgetAuth()
   const inputRef = useRef<HTMLInputElement>(null)
   const canVote = isIdentified || anonymousVotingEnabled
 
@@ -165,28 +165,28 @@ export function WidgetHome({
   return (
     <div className="flex flex-col h-full">
       {/* Search input + close */}
-      <div className="px-3 pt-3 pb-1 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 min-w-0">
-            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="What's on your mind?"
-              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-background transition-colors"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={closeWidget}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors shrink-0"
-            aria-label="Close feedback widget"
-          >
-            <XMarkIcon className="w-4 h-4 text-muted-foreground" />
-          </button>
+      <div className="px-3 pt-1 pb-1 shrink-0">
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search ideas..."
+            className="w-full pl-8 pr-8 py-2 text-sm rounded-lg border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-background transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchQueryChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-sm hover:bg-muted transition-colors"
+              aria-label="Clear search"
+            >
+              <XMarkIcon className="w-3.5 h-3.5 text-muted-foreground/60" />
+            </button>
+          )}
         </div>
 
         {/* Board selector */}
@@ -250,6 +250,16 @@ export function WidgetHome({
               </>
             )}
           </div>
+        )}
+        {!isSearchMode && (
+          <button
+            type="button"
+            onClick={() => onSubmitNew('')}
+            className="w-full flex items-center gap-2 mt-2 px-3 py-2 text-sm font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors"
+          >
+            <PencilSquareIcon className="w-4 h-4" />
+            Share an idea
+          </button>
         )}
       </div>
 

@@ -18,27 +18,21 @@ import { sanitizeTiptapContent } from '@/lib/server/sanitize-tiptap'
 import { getRequestHeaders } from '@tanstack/react-start/server'
 import { getOptionalAuth, requireAuth, hasAuthCredentials } from './auth-helpers'
 import { getSettings } from './workspace'
+import { listPublicPosts, getAllUserVotedPostIds } from '@/lib/server/domains/posts/post.public'
 import {
-  listPublicPosts,
-  getAllUserVotedPostIds,
   getPublicRoadmapPostsPaginated,
   getVoteAndSubscriptionStatus,
-} from '@/lib/server/domains/posts/post.public'
+} from '@/lib/server/domains/posts/post.public.utils'
 import { createPost } from '@/lib/server/domains/posts/post.service'
 import { voteOnPost } from '@/lib/server/domains/posts/post.voting'
 import { checkAnonVoteRateLimit } from '@/lib/server/utils/anon-rate-limit'
-import {
-  getPostPermissions,
-  userEditPost,
-  softDeletePost,
-} from '@/lib/server/domains/posts/post.permissions'
+import { getPostPermissions } from '@/lib/server/domains/posts/post.permissions'
+import { userEditPost, softDeletePost } from '@/lib/server/domains/posts/post.user-actions'
 import { getPublicBoardById } from '@/lib/server/domains/boards/board.public'
 import { getDefaultStatus } from '@/lib/server/domains/statuses/status.service'
 import { getMemberByUser } from '@/lib/server/domains/principals/principal.service'
-import {
-  listPublicRoadmaps,
-  getPublicRoadmapPosts,
-} from '@/lib/server/domains/roadmaps/roadmap.service'
+import { listPublicRoadmaps } from '@/lib/server/domains/roadmaps/roadmap.service'
+import { getPublicRoadmapPosts } from '@/lib/server/domains/roadmaps/roadmap.query'
 
 // ============================================
 // Schemas

@@ -20,19 +20,16 @@ import { db, eq, posts } from '@/lib/server/db'
 import { createActivity } from '@/lib/server/domains/activity/activity.service'
 import { getMemberById } from '@/lib/server/domains/principals/principal.service'
 import { createPost, updatePost } from '@/lib/server/domains/posts/post.service'
-import {
-  listInboxPosts,
-  getPostWithDetails,
-  getCommentsWithReplies,
-  getPostFeedbackSource,
-} from '@/lib/server/domains/posts/post.query'
+import { listInboxPosts } from '@/lib/server/domains/posts/post.inbox'
+import { getPostWithDetails, getCommentsWithReplies } from '@/lib/server/domains/posts/post.query'
+import { getPostFeedbackSource } from '@/lib/server/domains/posts/post.export'
 import { changeStatus } from '@/lib/server/domains/posts/post.status'
-import { softDeletePost, restorePost } from '@/lib/server/domains/posts/post.permissions'
+import { softDeletePost, restorePost } from '@/lib/server/domains/posts/post.user-actions'
 import {
   getPostExternalLinks,
   executeCascadeDelete,
 } from '@/lib/server/domains/posts/post.cascade-delete'
-import { hasUserVoted } from '@/lib/server/domains/posts/post.public'
+import { hasUserVoted } from '@/lib/server/domains/posts/post.public.utils'
 import { getMergedPosts, getPostMergeInfo } from '@/lib/server/domains/posts/post.merge'
 import { getPostVoters, addVoteOnBehalf, removeVote } from '@/lib/server/domains/posts/post.voting'
 import { toIsoString, toIsoStringOrNull } from '@/lib/shared/utils'

@@ -21,6 +21,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import Underline from '@tiptap/extension-underline'
 import Youtube from '@tiptap/extension-youtube'
+import { Markdown } from '@tiptap/markdown'
 import { Extension } from '@tiptap/core'
 import type { Range } from '@tiptap/core'
 import Suggestion, { type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion'
@@ -622,7 +623,7 @@ function createSlashCommands(
 
 interface RichTextEditorProps {
   value?: string | JSONContent
-  onChange?: (json: JSONContent, html: string) => void
+  onChange?: (json: JSONContent, html: string, markdown: string) => void
   placeholder?: string
   className?: string
   disabled?: boolean
@@ -752,11 +753,14 @@ export function RichTextEditor({
         : []),
       // Conditionally add slash commands (enabled by default)
       ...(features.slashMenu !== false ? [createSlashCommands(features, onImageUpload)] : []),
+      // Markdown extension for bidirectional markdown support
+      Markdown,
     ],
     content: value ?? '',
     editable: !disabled,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getJSON(), editor.getHTML())
+      const markdown = editor.getMarkdown?.() ?? ''
+      onChange?.(editor.getJSON(), editor.getHTML(), markdown)
     },
     editorProps: {
       attributes: {
@@ -1715,8 +1719,16 @@ function generateContentHTML(content: JSONContent): string {
       case 'orderedList':
         return `<ol>${node.content?.map(renderNode).join('') ?? ''}</ol>`
 
-      case 'listItem':
-        return `<li>${node.content?.map(renderNode).join('') ?? ''}</li>`
+      case 'listItem': {
+        // Unwrap single-paragraph list items to avoid <li><p>…</p></li>
+        // which causes Tailwind prose to add large p margins inside li
+        const children = node.content ?? []
+        if (children.length === 1 && children[0].type === 'paragraph') {
+          const inlineHtml = children[0].content?.map(renderNode).join('') ?? ''
+          return `<li>${inlineHtml}</li>`
+        }
+        return `<li>${children.map(renderNode).join('')}</li>`
+      }
 
       case 'taskList':
         return `<ul class="not-prose list-none pl-0">${node.content?.map(renderNode).join('') ?? ''}</ul>`
@@ -1881,55 +1893,6 @@ export function RichTextContent({ content, className }: RichTextContentProps) {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-// Helper to convert TipTap JSON to plain text
-export function richTextToPlainText(content: JSONContent): string {
-  if (!content.content) return ''
-
-  return content.content
-    .map((node) => {
-      if (node.type === 'paragraph' && node.content) {
-        return node.content
-          .map((child) => {
-            if (child.type === 'text') return child.text || ''
-            return ''
-          })
-          .join('')
-      }
-      if (node.type === 'heading' && node.content) {
-        return node.content
-          .map((child) => {
-            if (child.type === 'text') return child.text || ''
-            return ''
-          })
-          .join('')
-      }
-      if (node.type === 'bulletList' || node.type === 'orderedList') {
-        return (
-          node.content
-            ?.map((item) => {
-              if (item.type === 'listItem' && item.content) {
-                return item.content
-                  .map((p) => {
-                    if (p.type === 'paragraph' && p.content) {
-                      return p.content.map((c) => c.text || '').join('')
-                    }
-                    return ''
-                  })
-                  .join('')
-              }
-              return ''
-            })
-            .join('\n') || ''
-        )
-      }
-      if (node.type === 'codeBlock' && node.content) {
-        return node.content.map((c) => c.text || '').join('')
-      }
-      return ''
-    })
-    .join('\n')
-}
 
 // Helper to check if content is TipTap JSON
 export function isRichTextContent(content: unknown): content is JSONContent {

@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { ModalHeader } from '@/components/shared/modal-header'
 import { UrlModalShell } from '@/components/shared/url-modal-shell'
 import { Button } from '@/components/ui/button'
-import { RichTextEditor, richTextToPlainText } from '@/components/ui/rich-text-editor'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { adminQueries } from '@/lib/client/queries/admin'
 import { mergeSuggestionQueries } from '@/lib/client/queries/signals'
 import { inboxKeys } from '@/lib/client/hooks/use-inbox-query'
@@ -98,6 +98,7 @@ function PostModalContent({
   // Form state - always in edit mode
   const [title, setTitle] = useState(post.title)
   const [contentJson, setContentJson] = useState<JSONContent | null>(getInitialContentJson(post))
+  const [contentMarkdown, setContentMarkdown] = useState(post.content ?? '')
   const [hasInitialized, setHasInitialized] = useState(false)
 
   // UI state
@@ -208,8 +209,9 @@ function PostModalContent({
     }
   }
 
-  const handleContentChange = useCallback((json: JSONContent) => {
-    setContentJson(json)
+  const handleContentChange = useCallback((_json: JSONContent, _html: string, markdown: string) => {
+    setContentJson(_json)
+    setContentMarkdown(markdown)
   }, [])
 
   const handleSubmit = async () => {
@@ -219,11 +221,10 @@ function PostModalContent({
     }
 
     try {
-      const plainText = contentJson ? richTextToPlainText(contentJson) : ''
       await updatePost.mutateAsync({
         postId: post.id as PostId,
         title: title.trim(),
-        content: plainText,
+        content: contentMarkdown,
         contentJson: contentJson ?? null,
       })
       toast.success('Post updated')
@@ -265,11 +266,7 @@ function PostModalContent({
   }
 
   // Check if there are changes
-  const originalPlainText = post.contentJson
-    ? richTextToPlainText(post.contentJson as JSONContent)
-    : post.content
-  const currentPlainText = contentJson ? richTextToPlainText(contentJson) : ''
-  const hasChanges = title !== post.title || currentPlainText !== originalPlainText
+  const hasChanges = title !== post.title || contentMarkdown !== (post.content ?? '')
 
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown}>

@@ -30,15 +30,12 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
-import {
-  listInboxPosts,
-  getPostWithDetails,
-  getCommentsWithReplies,
-} from '@/lib/server/domains/posts/post.query'
+import { listInboxPosts } from '@/lib/server/domains/posts/post.inbox'
+import { getPostWithDetails, getCommentsWithReplies } from '@/lib/server/domains/posts/post.query'
 import { createPost, updatePost } from '@/lib/server/domains/posts/post.service'
 import { voteOnPost, addVoteOnBehalf, removeVote } from '@/lib/server/domains/posts/post.voting'
 import { mergePost, unmergePost, getMergedPosts } from '@/lib/server/domains/posts/post.merge'
-import { softDeletePost, restorePost } from '@/lib/server/domains/posts/post.permissions'
+import { softDeletePost, restorePost } from '@/lib/server/domains/posts/post.user-actions'
 import { getActivityForPost, createActivity } from '@/lib/server/domains/activity/activity.service'
 import {
   acceptCreateSuggestion,
@@ -55,16 +52,15 @@ import {
   createComment,
   updateComment,
   deleteComment,
-  addReaction,
-  removeReaction,
 } from '@/lib/server/domains/comments/comment.service'
+import { addReaction, removeReaction } from '@/lib/server/domains/comments/comment.reactions'
 import {
   createChangelog,
   updateChangelog,
   deleteChangelog,
-  listChangelogs,
   getChangelogById,
 } from '@/lib/server/domains/changelog/changelog.service'
+import { listChangelogs } from '@/lib/server/domains/changelog/changelog.query'
 import {
   addPostToRoadmap,
   removePostFromRoadmap,

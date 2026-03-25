@@ -18,7 +18,6 @@ import { changelogQueries } from '@/lib/client/queries/changelog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
-import { richTextToPlainText } from '@/components/ui/rich-text-editor'
 import { ChangelogFormFields } from './changelog-form-fields'
 import { ChangelogMetadataSidebar } from './changelog-metadata-sidebar'
 import { ChangelogMetadataSidebarContent } from './changelog-metadata-sidebar-content'
@@ -74,10 +73,9 @@ function ChangelogModalContent({ entryId, onClose }: ChangelogModalContentProps)
   }, [entry, form, hasInitialized])
 
   const handleContentChange = useCallback(
-    (json: JSONContent) => {
+    (json: JSONContent, _html: string, markdown: string) => {
       setContentJson(json)
-      const plainText = richTextToPlainText(json)
-      form.setValue('content', plainText, { shouldValidate: true })
+      form.setValue('content', markdown, { shouldValidate: true })
     },
     [form]
   )

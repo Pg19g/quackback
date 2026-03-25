@@ -26,34 +26,35 @@ export function WidgetShell({ orgSlug, onBack, children }: WidgetShellProps) {
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
-      {/* Minimal controls bar — only for sub-views with back navigation */}
-      {onBack && (
-        <div className="flex items-center justify-between px-2 pt-2 shrink-0">
-          <button
-            type="button"
-            onClick={onBack}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
-            aria-label="Go back"
-          >
-            <ArrowLeftIcon className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <div className="flex items-center gap-1">
-            {user && (
-              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+      <div className="flex items-center justify-between px-2 pt-2 shrink-0">
+        <div>
+          {onBack && (
             <button
               type="button"
-              onClick={closeWidget}
+              onClick={onBack}
               className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
-              aria-label="Close feedback widget"
+              aria-label="Go back"
             >
-              <XMarkIcon className="w-4 h-4 text-muted-foreground" />
+              <ArrowLeftIcon className="w-4 h-4 text-muted-foreground" />
             </button>
-          </div>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-1">
+          {user && (
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={closeWidget}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+            aria-label="Close feedback widget"
+          >
+            <XMarkIcon className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
 
       <div className="flex-1 overflow-hidden min-h-0">{children}</div>
 

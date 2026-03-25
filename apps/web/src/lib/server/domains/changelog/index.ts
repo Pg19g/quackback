@@ -10,11 +10,9 @@ export {
   updateChangelog,
   deleteChangelog,
   getChangelogById,
-  listChangelogs,
-  getPublicChangelogById,
-  listPublicChangelogs,
-  searchShippedPosts,
 } from './changelog.service'
+export { listChangelogs, searchShippedPosts } from './changelog.query'
+export { getPublicChangelogById, listPublicChangelogs } from './changelog.public'
 
 // Types
 export type {

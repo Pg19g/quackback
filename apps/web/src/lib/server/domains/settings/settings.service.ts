@@ -1,7 +1,7 @@
 import { db, eq, settings } from '@/lib/server/db'
-import { cacheGet, cacheSet, cacheDel, CACHE_KEYS } from '@/lib/server/redis'
-import { NotFoundError, InternalError, ValidationError } from '@/lib/shared/errors'
-import { getPublicUrlOrNull, deleteObject } from '@/lib/server/storage/s3'
+import { cacheGet, cacheSet, CACHE_KEYS } from '@/lib/server/redis'
+import { ValidationError } from '@/lib/shared/errors'
+import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
 import type {
   AuthConfig,
   UpdateAuthConfigInput,
@@ -12,9 +12,7 @@ import type {
   PublicPortalConfig,
   DeveloperConfig,
   UpdateDeveloperConfigInput,
-  WidgetConfig,
   PublicWidgetConfig,
-  UpdateWidgetConfigInput,
 } from './settings.types'
 import {
   DEFAULT_AUTH_CONFIG,
@@ -22,58 +20,14 @@ import {
   DEFAULT_DEVELOPER_CONFIG,
   DEFAULT_WIDGET_CONFIG,
 } from './settings.types'
-import { randomBytes } from 'crypto'
-
-type SettingsRecord = NonNullable<Awaited<ReturnType<typeof db.query.settings.findFirst>>>
-
-/** @internal Exported for testing */
-export function parseJsonConfig<T extends object>(json: string | null, defaultValue: T): T {
-  if (!json) return defaultValue
-  try {
-    return deepMerge(defaultValue, JSON.parse(json))
-  } catch {
-    return defaultValue
-  }
-}
-
-function parseJsonOrNull<T>(json: string | null): T | null {
-  if (!json) return null
-  try {
-    return JSON.parse(json) as T
-  } catch {
-    return null
-  }
-}
-
-function deepMerge<T extends object>(target: T, source: Partial<T>): T {
-  const result = { ...target }
-  for (const key in source) {
-    if (source[key] !== undefined) {
-      const srcVal = source[key]
-      const tgtVal = result[key]
-      const isNestedObject =
-        typeof srcVal === 'object' &&
-        srcVal !== null &&
-        !Array.isArray(srcVal) &&
-        typeof tgtVal === 'object' &&
-        tgtVal !== null
-
-      result[key] = isNestedObject
-        ? (deepMerge(
-            tgtVal as Record<string, unknown>,
-            srcVal as Record<string, unknown>
-          ) as T[typeof key])
-        : (srcVal as T[typeof key])
-    }
-  }
-  return result
-}
-
-async function requireSettings(): Promise<SettingsRecord> {
-  const org = await db.query.settings.findFirst()
-  if (!org) throw new NotFoundError('SETTINGS_NOT_FOUND', 'Settings not found')
-  return org
-}
+import {
+  parseJsonConfig,
+  parseJsonOrNull,
+  deepMerge,
+  requireSettings,
+  wrapDbError,
+  invalidateSettingsCache,
+} from './settings.helpers'
 
 async function getConfiguredAuthTypes(): Promise<Set<string>> {
   const { getConfiguredIntegrationTypes } =
@@ -96,12 +50,6 @@ function filterOAuthByCredentials(
     }
   }
   return filtered
-}
-
-function wrapDbError(operation: string, error: unknown): never {
-  if (error instanceof NotFoundError || error instanceof ValidationError) throw error
-  const message = error instanceof Error ? error.message : 'Unknown error'
-  throw new InternalError('DATABASE_ERROR', `Failed to ${operation}: ${message}`, error)
 }
 
 async function getPortalPassthroughKeys(): Promise<string[]> {
@@ -233,367 +181,6 @@ export async function updateDeveloperConfig(
   }
 }
 
-// ============================================================================
-// Widget Configuration
-// ============================================================================
-
-export async function getWidgetConfig(): Promise<WidgetConfig> {
-  try {
-    const org = await requireSettings()
-    return parseJsonConfig(org.widgetConfig, DEFAULT_WIDGET_CONFIG)
-  } catch (error) {
-    console.error(`[domain:settings] getWidgetConfig failed:`, error)
-    wrapDbError('fetch widget config', error)
-  }
-}
-
-export async function updateWidgetConfig(input: UpdateWidgetConfigInput): Promise<WidgetConfig> {
-  console.log(`[domain:settings] updateWidgetConfig`)
-  try {
-    const org = await requireSettings()
-    const existing = parseJsonConfig(org.widgetConfig, DEFAULT_WIDGET_CONFIG)
-    const updated = deepMerge(existing, input as Partial<WidgetConfig>)
-    await db
-      .update(settings)
-      .set({ widgetConfig: JSON.stringify(updated) })
-      .where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-    return updated
-  } catch (error) {
-    console.error(`[domain:settings] updateWidgetConfig failed:`, error)
-    wrapDbError('update widget config', error)
-  }
-}
-
-export async function getPublicWidgetConfig(): Promise<PublicWidgetConfig> {
-  try {
-    const org = await requireSettings()
-    const config = parseJsonConfig(org.widgetConfig, DEFAULT_WIDGET_CONFIG)
-    return {
-      enabled: config.enabled,
-      defaultBoard: config.defaultBoard,
-      position: config.position,
-    }
-  } catch (error) {
-    console.error(`[domain:settings] getPublicWidgetConfig failed:`, error)
-    wrapDbError('fetch public widget config', error)
-  }
-}
-
-/** Generate a new widget secret: 'wgt_' + 32 random bytes (64 hex chars) */
-export function generateWidgetSecret(): string {
-  return 'wgt_' + randomBytes(32).toString('hex')
-}
-
-/** Get the widget secret (admin only — never expose in TenantSettings) */
-export async function getWidgetSecret(): Promise<string | null> {
-  try {
-    const org = await requireSettings()
-    return org.widgetSecret ?? null
-  } catch (error) {
-    console.error(`[domain:settings] getWidgetSecret failed:`, error)
-    wrapDbError('fetch widget secret', error)
-  }
-}
-
-/** Regenerate the widget secret. Returns the new secret once. */
-export async function regenerateWidgetSecret(): Promise<string> {
-  console.log(`[domain:settings] regenerateWidgetSecret`)
-  try {
-    const org = await requireSettings()
-    const secret = generateWidgetSecret()
-    await db.update(settings).set({ widgetSecret: secret }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-    return secret
-  } catch (error) {
-    console.error(`[domain:settings] regenerateWidgetSecret failed:`, error)
-    wrapDbError('regenerate widget secret', error)
-  }
-}
-
-export async function getBrandingConfig(): Promise<BrandingConfig> {
-  try {
-    const org = await requireSettings()
-    return parseJsonOrNull<BrandingConfig>(org.brandingConfig) ?? {}
-  } catch (error) {
-    console.error(`[domain:settings] getBrandingConfig failed:`, error)
-    wrapDbError('fetch branding config', error)
-  }
-}
-
-export async function updateBrandingConfig(config: BrandingConfig): Promise<BrandingConfig> {
-  console.log(`[domain:settings] updateBrandingConfig`)
-  try {
-    const org = await requireSettings()
-    await db
-      .update(settings)
-      .set({ brandingConfig: JSON.stringify(config) })
-      .where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-    return config
-  } catch (error) {
-    console.error(`[domain:settings] updateBrandingConfig failed:`, error)
-    wrapDbError('update branding config', error)
-  }
-}
-
-export async function getCustomCss(): Promise<string> {
-  try {
-    const org = await requireSettings()
-    return org.customCss ?? ''
-  } catch (error) {
-    console.error(`[domain:settings] getCustomCss failed:`, error)
-    wrapDbError('fetch custom CSS', error)
-  }
-}
-
-export async function updateCustomCss(css: string): Promise<string> {
-  console.log(`[domain:settings] updateCustomCss`)
-  try {
-    const org = await requireSettings()
-    await db.update(settings).set({ customCss: css }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-    return css
-  } catch (error) {
-    console.error(`[domain:settings] updateCustomCss failed:`, error)
-    wrapDbError('update custom CSS', error)
-  }
-}
-
-// ============================================================================
-// S3 Key Storage Functions
-// ============================================================================
-
-/**
- * Save logo S3 key and delete old image if exists.
- */
-export async function saveLogoKey(key: string): Promise<{ success: true; key: string }> {
-  console.log(`[domain:settings] saveLogoKey`)
-  try {
-    const org = await requireSettings()
-
-    // Delete old S3 image if exists
-    if (org.logoKey) {
-      try {
-        await deleteObject(org.logoKey)
-      } catch (err) {
-        console.warn(`[domain:settings] Failed to delete old logo S3 object ${org.logoKey}:`, err)
-      }
-    }
-
-    await db.update(settings).set({ logoKey: key }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-
-    return { success: true, key }
-  } catch (error) {
-    console.error(`[domain:settings] saveLogoKey failed:`, error)
-    wrapDbError('save logo key', error)
-  }
-}
-
-/**
- * Delete logo from S3 and clear the key.
- */
-export async function deleteLogoKey(): Promise<{ success: true }> {
-  console.log(`[domain:settings] deleteLogoKey`)
-  try {
-    const org = await requireSettings()
-
-    if (org.logoKey) {
-      try {
-        await deleteObject(org.logoKey)
-      } catch (err) {
-        console.warn(`[domain:settings] Failed to delete logo S3 object ${org.logoKey}:`, err)
-      }
-    }
-
-    await db.update(settings).set({ logoKey: null }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-
-    return { success: true }
-  } catch (error) {
-    console.error(`[domain:settings] deleteLogoKey failed:`, error)
-    wrapDbError('delete logo key', error)
-  }
-}
-
-/**
- * Save favicon S3 key and delete old image if exists.
- */
-export async function saveFaviconKey(key: string): Promise<{ success: true; key: string }> {
-  console.log(`[domain:settings] saveFaviconKey`)
-  try {
-    const org = await requireSettings()
-
-    if (org.faviconKey) {
-      try {
-        await deleteObject(org.faviconKey)
-      } catch (err) {
-        console.warn(
-          `[domain:settings] Failed to delete old favicon S3 object ${org.faviconKey}:`,
-          err
-        )
-      }
-    }
-
-    await db.update(settings).set({ faviconKey: key }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-
-    return { success: true, key }
-  } catch (error) {
-    console.error(`[domain:settings] saveFaviconKey failed:`, error)
-    wrapDbError('save favicon key', error)
-  }
-}
-
-/**
- * Delete favicon from S3 and clear the key.
- */
-export async function deleteFaviconKey(): Promise<{ success: true }> {
-  console.log(`[domain:settings] deleteFaviconKey`)
-  try {
-    const org = await requireSettings()
-
-    if (org.faviconKey) {
-      try {
-        await deleteObject(org.faviconKey)
-      } catch (err) {
-        console.warn(`[domain:settings] Failed to delete favicon S3 object ${org.faviconKey}:`, err)
-      }
-    }
-
-    await db.update(settings).set({ faviconKey: null }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-
-    return { success: true }
-  } catch (error) {
-    console.error(`[domain:settings] deleteFaviconKey failed:`, error)
-    wrapDbError('delete favicon key', error)
-  }
-}
-
-/**
- * Save header logo S3 key and delete old image if exists.
- */
-export async function saveHeaderLogoKey(key: string): Promise<{ success: true; key: string }> {
-  console.log(`[domain:settings] saveHeaderLogoKey`)
-  try {
-    const org = await requireSettings()
-
-    if (org.headerLogoKey) {
-      try {
-        await deleteObject(org.headerLogoKey)
-      } catch (err) {
-        console.warn(
-          `[domain:settings] Failed to delete old header logo S3 object ${org.headerLogoKey}:`,
-          err
-        )
-      }
-    }
-
-    await db.update(settings).set({ headerLogoKey: key }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-
-    return { success: true, key }
-  } catch (error) {
-    console.error(`[domain:settings] saveHeaderLogoKey failed:`, error)
-    wrapDbError('save header logo key', error)
-  }
-}
-
-/**
- * Delete header logo from S3 and clear the key.
- */
-export async function deleteHeaderLogoKey(): Promise<{ success: true }> {
-  console.log(`[domain:settings] deleteHeaderLogoKey`)
-  try {
-    const org = await requireSettings()
-
-    if (org.headerLogoKey) {
-      try {
-        await deleteObject(org.headerLogoKey)
-      } catch (err) {
-        console.warn(
-          `[domain:settings] Failed to delete header logo S3 object ${org.headerLogoKey}:`,
-          err
-        )
-      }
-    }
-
-    await db.update(settings).set({ headerLogoKey: null }).where(eq(settings.id, org.id))
-    await invalidateSettingsCache()
-
-    return { success: true }
-  } catch (error) {
-    console.error(`[domain:settings] deleteHeaderLogoKey failed:`, error)
-    wrapDbError('delete header logo key', error)
-  }
-}
-
-const VALID_HEADER_MODES = ['logo_and_name', 'logo_only', 'custom_logo'] as const
-
-export async function updateHeaderDisplayMode(mode: string): Promise<string> {
-  console.log(`[domain:settings] updateHeaderDisplayMode: mode=${mode}`)
-  if (!VALID_HEADER_MODES.includes(mode as (typeof VALID_HEADER_MODES)[number])) {
-    throw new ValidationError('VALIDATION_ERROR', `Invalid header display mode: ${mode}`)
-  }
-
-  try {
-    const org = await requireSettings()
-    const [updated] = await db
-      .update(settings)
-      .set({ headerDisplayMode: mode })
-      .where(eq(settings.id, org.id))
-      .returning()
-
-    await invalidateSettingsCache()
-    return updated?.headerDisplayMode || 'logo_and_name'
-  } catch (error) {
-    console.error(`[domain:settings] updateHeaderDisplayMode failed:`, error)
-    wrapDbError('update header display mode', error)
-  }
-}
-
-export async function updateHeaderDisplayName(name: string | null): Promise<string | null> {
-  console.log(`[domain:settings] updateHeaderDisplayName`)
-  try {
-    const org = await requireSettings()
-    const sanitizedName = name?.trim() || null
-
-    const [updated] = await db
-      .update(settings)
-      .set({ headerDisplayName: sanitizedName })
-      .where(eq(settings.id, org.id))
-      .returning()
-
-    await invalidateSettingsCache()
-    return updated?.headerDisplayName ?? null
-  } catch (error) {
-    console.error(`[domain:settings] updateHeaderDisplayName failed:`, error)
-    wrapDbError('update header display name', error)
-  }
-}
-
-export async function updateWorkspaceName(name: string): Promise<string> {
-  console.log(`[domain:settings] updateWorkspaceName`)
-  try {
-    const org = await requireSettings()
-    const sanitizedName = name.trim()
-    if (!sanitizedName) throw new ValidationError('INVALID_NAME', 'Workspace name cannot be empty')
-
-    const [updated] = await db
-      .update(settings)
-      .set({ name: sanitizedName })
-      .where(eq(settings.id, org.id))
-      .returning()
-    await invalidateSettingsCache()
-    return updated?.name ?? sanitizedName
-  } catch (error) {
-    console.error(`[domain:settings] updateWorkspaceName failed:`, error)
-    wrapDbError('update workspace name', error)
-  }
-}
-
 export async function getPublicAuthConfig(): Promise<PublicAuthConfig> {
   try {
     const org = await requireSettings()
@@ -667,11 +254,6 @@ export interface TenantSettings {
   publicWidgetConfig: PublicWidgetConfig
   brandingData: SettingsBrandingData
   faviconData: { url: string } | null
-}
-
-export async function invalidateSettingsCache(): Promise<void> {
-  console.log(`[domain:settings] Invalidating settings cache`)
-  await cacheDel(CACHE_KEYS.TENANT_SETTINGS)
 }
 
 export async function getTenantSettings(): Promise<TenantSettings | null> {
@@ -753,3 +335,5 @@ export async function getTenantSettings(): Promise<TenantSettings | null> {
     wrapDbError('fetch settings with all configs', error)
   }
 }
+
+// ============================================================================

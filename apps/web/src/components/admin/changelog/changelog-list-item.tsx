@@ -58,7 +58,17 @@ export function ChangelogListItem({
   onDelete,
 }: ChangelogListItemProps) {
   const config = STATUS_CONFIG[status]
-  const contentPreview = content.length > 150 ? content.slice(0, 150) + '...' : content
+  const plain = content
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/!\[.*?\]\(.+?\)/g, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/\n+/g, ' ')
+    .trim()
+  const contentPreview = plain.length > 150 ? plain.slice(0, 150) + '...' : plain
 
   return (
     <div

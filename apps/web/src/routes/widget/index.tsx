@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { useState, useCallback, useEffect } from 'react'
-import { CheckCircleIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/solid'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { CheckCircleIcon } from '@heroicons/react/24/solid'
+import { ArrowLeftIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import { WidgetVoteButton } from '@/components/widget/widget-vote-button'
 import type { PostId } from '@quackback/ids'
 import { WidgetShell } from '@/components/widget/widget-shell'
@@ -11,7 +12,6 @@ import { WidgetPostDetail } from '@/components/widget/widget-post-detail'
 import { useWidgetAuth } from '@/components/widget/widget-auth-provider'
 import { portalQueries } from '@/lib/client/queries/portal'
 import { widgetQueryKeys, INITIAL_SESSION_VERSION } from '@/lib/client/hooks/use-widget-vote'
-import { generateOneTimeToken } from '@/lib/client/widget-auth'
 
 const searchSchema = z.object({
   board: z.string().optional(),
@@ -84,7 +84,7 @@ interface SuccessPost {
 
 function WidgetPage() {
   const { posts, statuses, boards, defaultBoard, orgSlug, features } = Route.useLoaderData()
-  const { isIdentified, closeWidget, ensureSession } = useWidgetAuth()
+  const { isIdentified, ensureSession } = useWidgetAuth()
   const canVote = isIdentified || features.anonymousVoting
 
   const [view, setView] = useState<WidgetView>('home')
@@ -93,6 +93,13 @@ function WidgetPage() {
   const [prefilledTitle, setPrefilledTitle] = useState('')
   const [successPost, setSuccessPost] = useState<SuccessPost | null>(null)
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+  const [createdPosts, setCreatedPosts] = useState<typeof posts>([])
+
+  // Merge newly created posts with initial posts so they appear immediately
+  const allPosts = useMemo(() => {
+    const createdIds = new Set(createdPosts.map((p) => p.id))
+    return [...createdPosts, ...posts.filter((p) => !createdIds.has(p.id))]
+  }, [posts, createdPosts])
 
   // Listen for quackback:open messages from the SDK
   useEffect(() => {
@@ -115,9 +122,8 @@ function WidgetPage() {
   const canPost = isIdentified || features.anonymousPosting
   const handleSubmitNew = useCallback(
     async (title: string) => {
-      if (!canPost) return
       // Ensure session exists for anonymous posters
-      if (!isIdentified) {
+      if (canPost && !isIdentified) {
         const ok = await ensureSession()
         if (!ok) return
       }
@@ -128,6 +134,17 @@ function WidgetPage() {
   )
 
   const handlePostSuccess = useCallback((post: SuccessPost) => {
+    setCreatedPosts((prev) => [
+      {
+        id: post.id as (typeof prev)[number]['id'],
+        title: post.title,
+        voteCount: post.voteCount,
+        statusId: post.statusId as (typeof prev)[number]['statusId'],
+        commentCount: 0,
+        board: post.board as (typeof prev)[number]['board'],
+      },
+      ...prev,
+    ])
     setSuccessPost(post)
     setView('success')
   }, [])
@@ -139,17 +156,18 @@ function WidgetPage() {
 
   const handleBack = useCallback(() => {
     setSelectedPostId(null)
+    setSearchQuery('')
     setView('home')
   }, [])
 
   // Shell props based on view
-  const shellOnBack = view === 'new-post' || view === 'post-detail' ? handleBack : undefined
+  const shellOnBack = view !== 'home' ? handleBack : undefined
 
   return (
     <WidgetShell orgSlug={orgSlug} onBack={shellOnBack}>
       {view === 'home' && (
         <WidgetHome
-          initialPosts={posts}
+          initialPosts={allPosts}
           statuses={statuses}
           boards={boards}
           defaultBoard={defaultBoard}
@@ -204,7 +222,7 @@ function WidgetPage() {
                 </div>
               </div>
 
-              {/* Post card — same format as the list view */}
+              {/* Post card */}
               <div className="px-3">
                 <div
                   className="flex items-center gap-2 rounded-lg bg-muted/20 border border-border/50 px-2 py-2 cursor-pointer hover:bg-muted/30 transition-colors"
@@ -251,30 +269,25 @@ function WidgetPage() {
               </div>
 
               {/* Actions */}
-              <div className="px-4 pt-3 space-y-2">
+              <div className="px-3 pt-3 space-y-2">
                 <button
                   type="button"
-                  onClick={async () => {
-                    let url = `${window.location.origin}/b/${successPost.board.slug}/posts/${successPost.id}`
-                    const ott = await generateOneTimeToken()
-                    if (ott) url += `?ott=${encodeURIComponent(ott)}`
-                    window.parent.postMessage({ type: 'quackback:navigate', url }, '*')
-                  }}
-                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                  onClick={handleBack}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-foreground bg-muted/30 hover:bg-muted/50 rounded-lg border border-border/50 transition-colors"
                 >
-                  View on feedback board
-                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                  <ArrowLeftIcon className="w-3.5 h-3.5" />
+                  Browse all ideas
                 </button>
-              </div>
-
-              {/* Spacer + close at bottom */}
-              <div className="mt-auto px-4 pb-4 pt-3 flex justify-center">
                 <button
                   type="button"
-                  onClick={closeWidget}
-                  className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  onClick={() => {
+                    setPrefilledTitle('')
+                    setView('new-post')
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors"
                 >
-                  Close widget
+                  <PencilSquareIcon className="w-3.5 h-3.5" />
+                  Submit another idea
                 </button>
               </div>
             </div>
