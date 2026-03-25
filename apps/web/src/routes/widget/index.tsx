@@ -2,12 +2,11 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
-import { ArrowLeftIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { WidgetVoteButton } from '@/components/widget/widget-vote-button'
 import type { PostId } from '@quackback/ids'
 import { WidgetShell, type WidgetTab } from '@/components/widget/widget-shell'
 import { WidgetHome } from '@/components/widget/widget-home'
-import { WidgetNewPostForm } from '@/components/widget/widget-new-post-form'
 import { WidgetPostDetail } from '@/components/widget/widget-post-detail'
 import { WidgetChangelog } from '@/components/widget/widget-changelog'
 import { WidgetChangelogDetail } from '@/components/widget/widget-changelog-detail'
@@ -25,8 +24,6 @@ export const Route = createFileRoute('/widget/')({
     const { queryClient, settings, session } = context
     const search = location.search as z.infer<typeof searchSchema>
 
-    // Pass userId when session cookie is available (e.g. Chrome iframes,
-    // direct navigation) so votedPostIds are included in SSR data.
     const portalData = await queryClient.ensureQueryData(
       portalQueries.portalData({
         boardSlug: search.board,
@@ -35,7 +32,6 @@ export const Route = createFileRoute('/widget/')({
       })
     )
 
-    // Seed the widget votedPosts cache for SSR vote highlights.
     queryClient.setQueryData(
       widgetQueryKeys.votedPosts.bySession(INITIAL_SESSION_VERSION),
       new Set(portalData.votedPostIds)
@@ -78,7 +74,7 @@ export const Route = createFileRoute('/widget/')({
   component: WidgetPage,
 })
 
-type WidgetView = 'home' | 'new-post' | 'post-detail' | 'success' | 'changelog' | 'changelog-detail'
+type WidgetView = 'home' | 'post-detail' | 'success' | 'changelog' | 'changelog-detail'
 
 interface SuccessPost {
   id: string
@@ -96,15 +92,11 @@ function WidgetPage() {
   const initialTab: WidgetTab = tabs.feedback ? 'feedback' : 'changelog'
   const [view, setView] = useState<WidgetView>(initialTab === 'changelog' ? 'changelog' : 'home')
   const [activeTab, setActiveTab] = useState<WidgetTab>(initialTab)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedBoardSlug, setSelectedBoardSlug] = useState<string | undefined>(defaultBoard)
-  const [prefilledTitle, setPrefilledTitle] = useState('')
   const [successPost, setSuccessPost] = useState<SuccessPost | null>(null)
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const [selectedChangelogId, setSelectedChangelogId] = useState<string | null>(null)
   const [createdPosts, setCreatedPosts] = useState<typeof posts>([])
 
-  // Merge newly created posts with initial posts so they appear immediately
   const allPosts = useMemo(() => {
     const createdIds = new Set(createdPosts.map((p) => p.id))
     return [...createdPosts, ...posts.filter((p) => !createdIds.has(p.id))]
@@ -117,27 +109,17 @@ function WidgetPage() {
       const msg = event.data
       if (!msg || typeof msg !== 'object' || msg.type !== 'quackback:open' || !msg.data) return
 
-      const opts = msg.data as { view?: string; title?: string; board?: string }
-      if (opts.view === 'new-post' && tabs.feedback) {
-        if (opts.title) setPrefilledTitle(opts.title)
-        if (opts.board) setSelectedBoardSlug(opts.board)
-        setActiveTab('feedback')
-        setView('new-post')
-      } else if (opts.view === 'changelog' && tabs.changelog) {
+      const opts = msg.data as { view?: string }
+      if (opts.view === 'changelog' && tabs.changelog) {
         setActiveTab('changelog')
         setView('changelog')
       }
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [tabs.feedback, tabs.changelog])
+  }, [tabs.changelog])
 
-  const handleSubmitNew = useCallback((title: string) => {
-    setPrefilledTitle(title)
-    setView('new-post')
-  }, [])
-
-  const handlePostSuccess = useCallback((post: SuccessPost) => {
+  const handlePostCreated = useCallback((post: SuccessPost) => {
     setCreatedPosts((prev) => [
       {
         id: post.id as (typeof prev)[number]['id'],
@@ -165,7 +147,6 @@ function WidgetPage() {
       return
     }
     setSelectedPostId(null)
-    setSearchQuery('')
     setView('home')
   }, [view])
 
@@ -173,7 +154,6 @@ function WidgetPage() {
     setActiveTab(tab)
     if (tab === 'feedback') {
       setSelectedPostId(null)
-      setSearchQuery('')
       setView('home')
     } else {
       setSelectedChangelogId(null)
@@ -186,7 +166,6 @@ function WidgetPage() {
     setView('changelog-detail')
   }, [])
 
-  // Shell props based on view
   const shellOnBack = view !== 'home' && view !== 'changelog' ? handleBack : undefined
 
   return (
@@ -209,13 +188,10 @@ function WidgetPage() {
           statuses={statuses}
           boards={boards}
           defaultBoard={defaultBoard}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          selectedBoardSlug={selectedBoardSlug}
-          onBoardChange={setSelectedBoardSlug}
-          onSubmitNew={handleSubmitNew}
           onPostSelect={handlePostSelect}
+          onPostCreated={handlePostCreated}
           anonymousVotingEnabled={features.anonymousVoting}
+          anonymousPostingEnabled={features.anonymousPosting}
         />
       )}
 
@@ -225,16 +201,6 @@ function WidgetPage() {
           statuses={statuses}
           anonymousVotingEnabled={features.anonymousVoting}
           anonymousCommentingEnabled={features.anonymousCommenting}
-        />
-      )}
-
-      {view === 'new-post' && (
-        <WidgetNewPostForm
-          boards={boards}
-          prefilledTitle={prefilledTitle}
-          selectedBoardSlug={selectedBoardSlug}
-          onSuccess={handlePostSuccess}
-          anonymousPostingEnabled={features.anonymousPosting}
         />
       )}
 
@@ -249,7 +215,6 @@ function WidgetPage() {
 
           return (
             <div className="flex flex-col h-full">
-              {/* Success header */}
               <div className="flex items-center gap-2.5 px-4 pt-5 pb-3">
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 shrink-0">
                   <CheckCircleIcon className="w-4.5 h-4.5 text-primary" />
@@ -260,7 +225,6 @@ function WidgetPage() {
                 </div>
               </div>
 
-              {/* Post card */}
               <div className="px-3">
                 <div
                   className="flex items-center gap-2 rounded-lg bg-muted/20 border border-border/50 px-2 py-2 cursor-pointer hover:bg-muted/30 transition-colors"
@@ -274,14 +238,6 @@ function WidgetPage() {
                       postId={successPost.id as PostId}
                       voteCount={successPost.voteCount}
                       onBeforeVote={canVote ? ensureSession : undefined}
-                      onAuthRequired={
-                        !canVote
-                          ? () => {
-                              const url = `${window.location.origin}/b/${successPost.board.slug}/posts/${successPost.id}`
-                              window.parent.postMessage({ type: 'quackback:navigate', url }, '*')
-                            }
-                          : undefined
-                      }
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -306,26 +262,14 @@ function WidgetPage() {
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="px-3 pt-3 space-y-2">
+              <div className="px-3 pt-3">
                 <button
                   type="button"
                   onClick={handleBack}
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-foreground bg-muted/30 hover:bg-muted/50 rounded-lg border border-border/50 transition-colors"
                 >
                   <ArrowLeftIcon className="w-3.5 h-3.5" />
-                  Browse all ideas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPrefilledTitle('')
-                    setView('new-post')
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors"
-                >
-                  <PencilSquareIcon className="w-3.5 h-3.5" />
-                  Submit another idea
+                  Back to ideas
                 </button>
               </div>
             </div>
