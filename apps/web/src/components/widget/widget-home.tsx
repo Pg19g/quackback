@@ -226,7 +226,6 @@ export function WidgetHome({
   }
 
   const isTyping = title.trim().length > 0
-  const displayPosts = isTyping ? (searchResults?.posts ?? []) : initialPosts
   const canSubmitForm = title.trim() && (!needsEmail || email.trim()) && (canPost || needsEmail)
 
   return (
@@ -469,19 +468,13 @@ export function WidgetHome({
             </AnimatePresence>
           </motion.div>
 
-          {/* Post list — always visible below the card */}
+          {/* Post list — always shows popular ideas, unaffected by search */}
           <div className="mt-2">
             <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 py-1.5">
-              {isTyping
-                ? isSearching
-                  ? 'Searching...'
-                  : displayPosts.length > 0
-                    ? 'Similar ideas'
-                    : 'No matching ideas'
-                : 'Popular ideas'}
+              Popular ideas
             </p>
 
-            {!isTyping && displayPosts.length === 0 && (
+            {initialPosts.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <LightBulbIcon className="w-8 h-8 text-muted-foreground/30 mb-2" />
                 <p className="text-sm font-medium text-muted-foreground/70">No ideas yet</p>
@@ -491,9 +484,9 @@ export function WidgetHome({
               </div>
             )}
 
-            {displayPosts.length > 0 && (
+            {initialPosts.length > 0 && (
               <div className="space-y-0.5">
-                {displayPosts.map((post) => {
+                {initialPosts.map((post) => {
                   const status = post.statusId ? (statusMap.get(post.statusId) ?? null) : null
                   return (
                     <div
