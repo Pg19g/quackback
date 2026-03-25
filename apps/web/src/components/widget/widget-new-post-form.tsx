@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useWidgetAuth } from './widget-auth-provider'
-import { WidgetEmailCapture } from './widget-email-capture'
 
 interface WidgetNewPostFormProps {
   boards: { id: string; name: string; slug: string }[]
@@ -35,39 +34,12 @@ export function WidgetNewPostForm({
   anonymousPostingEnabled = false,
   hmacRequired = false,
 }: WidgetNewPostFormProps) {
-  const { isIdentified, user, emitEvent, metadata } = useWidgetAuth()
+  const { isIdentified, user, emitEvent, metadata, ensureSession, identifyWithEmail } =
+    useWidgetAuth()
   const canPost = isIdentified || anonymousPostingEnabled
 
-  const defaultBoard = selectedBoardSlug
-    ? boards.find((b) => b.slug === selectedBoardSlug)
-    : boards[0]
-
-  const [boardId, setBoardId] = useState(defaultBoard?.id ?? boards[0]?.id ?? '')
-  const [title, setTitle] = useState(prefilledTitle ?? '')
-  const [content, setContent] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const descriptionRef = useRef<HTMLTextAreaElement>(null)
-  const titleRef = useRef<HTMLInputElement>(null)
-
-  // Auto-focus: description if title is pre-filled, otherwise title
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (prefilledTitle) {
-        descriptionRef.current?.focus()
-      } else {
-        titleRef.current?.focus()
-      }
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [prefilledTitle])
-
-  if (!canPost) {
-    if (!hmacRequired) {
-      return <WidgetEmailCapture heading="Enter your email to share an idea" />
-    }
-
+  // When HMAC is on and user can't post, show the redirect gate
+  if (!canPost && hmacRequired) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
         <p className="text-sm font-medium text-foreground">Want to share an idea?</p>
@@ -87,14 +59,63 @@ export function WidgetNewPostForm({
     )
   }
 
+  // Show email/name fields when user isn't identified and HMAC is off
+  const needsEmail = !isIdentified && !hmacRequired && !anonymousPostingEnabled
+
+  const defaultBoard = selectedBoardSlug
+    ? boards.find((b) => b.slug === selectedBoardSlug)
+    : boards[0]
+
+  const [boardId, setBoardId] = useState(defaultBoard?.id ?? boards[0]?.id ?? '')
+  const [title, setTitle] = useState(prefilledTitle ?? '')
+  const [content, setContent] = useState('')
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
+
+  // Auto-focus: description if title is pre-filled, otherwise title
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (prefilledTitle) {
+        descriptionRef.current?.focus()
+      } else {
+        titleRef.current?.focus()
+      }
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [prefilledTitle])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim() || !boardId || isSubmitting) return
+    if (needsEmail && !email.trim()) return
 
     setIsSubmitting(true)
     setError(null)
 
     try {
+      // If user needs to identify via email, do it first
+      if (needsEmail) {
+        const identified = await identifyWithEmail(email.trim(), name.trim() || undefined)
+        if (!identified) {
+          setError('Could not verify your email. Please try again.')
+          setIsSubmitting(false)
+          return
+        }
+      } else if (!isIdentified) {
+        // Anonymous posting — ensure session exists
+        const ok = await ensureSession()
+        if (!ok) {
+          setError('Could not create session. Please try again.')
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       const { getWidgetAuthHeaders } = await import('@/lib/client/widget-auth')
       const { createPublicPostFn } = await import('@/lib/server/functions/public-posts')
       const result = await createPublicPostFn({
@@ -130,6 +151,8 @@ export function WidgetNewPostForm({
 
   const inputClass =
     'w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary'
+
+  const isValid = title.trim() && (!needsEmail || email.trim())
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col h-full">
@@ -186,16 +209,53 @@ export function WidgetNewPostForm({
           />
         </div>
 
+        {needsEmail && (
+          <>
+            <div>
+              <label htmlFor="widget-email" className="text-xs font-medium text-muted-foreground">
+                Email
+              </label>
+              <input
+                id="widget-email"
+                type="email"
+                required
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={`mt-1 ${inputClass}`}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="widget-name" className="text-xs font-medium text-muted-foreground">
+                Name (optional)
+              </label>
+              <input
+                id="widget-name"
+                type="text"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={`mt-1 ${inputClass}`}
+              />
+            </div>
+          </>
+        )}
+
         {error && <p className="text-xs text-destructive">{error}</p>}
       </ScrollArea>
 
       <div className="px-4 py-3 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
         <span className="text-xs text-muted-foreground truncate">
-          {user ? `Posting as ${user.name || user.email}` : 'Posting anonymously'}
+          {user
+            ? `Posting as ${user.name || user.email}`
+            : needsEmail
+              ? email.trim() || 'Enter your email'
+              : 'Posting anonymously'}
         </span>
         <button
           type="submit"
-          disabled={!title.trim() || isSubmitting}
+          disabled={!isValid || isSubmitting}
           className="px-4 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Submitting...' : 'Submit idea'}

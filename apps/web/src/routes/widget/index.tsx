@@ -134,19 +134,10 @@ function WidgetPage() {
     return () => window.removeEventListener('message', handleMessage)
   }, [])
 
-  const canPost = isIdentified || features.anonymousPosting
-  const handleSubmitNew = useCallback(
-    async (title: string) => {
-      // Ensure session exists for anonymous posters
-      if (canPost && !isIdentified) {
-        const ok = await ensureSession()
-        if (!ok) return
-      }
-      setPrefilledTitle(title)
-      setView('new-post')
-    },
-    [canPost, isIdentified, ensureSession]
-  )
+  const handleSubmitNew = useCallback((title: string) => {
+    setPrefilledTitle(title)
+    setView('new-post')
+  }, [])
 
   const handlePostSuccess = useCallback((post: SuccessPost) => {
     setCreatedPosts((prev) => [
