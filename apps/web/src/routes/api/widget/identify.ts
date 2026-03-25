@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { generateId } from '@quackback/ids'
 import type { UserId, PrincipalId } from '@quackback/ids'
 import { db, user, session, principal, eq, and, gt } from '@/lib/server/db'
-import { getWidgetConfig, getWidgetSecret } from '@/lib/server/domains/settings/settings.service'
+import { getWidgetConfig, getWidgetSecret } from '@/lib/server/domains/settings/settings.widget'
 import { getAllUserVotedPostIds } from '@/lib/server/domains/posts/post.public'
 
 // Accept either legacy HMAC fields or a JWT ssoToken
