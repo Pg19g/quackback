@@ -6,6 +6,7 @@ import type { UserId, PrincipalId } from '@quackback/ids'
 import { db, user, session, principal, eq, and, gt } from '@/lib/server/db'
 import { getWidgetConfig, getWidgetSecret } from '@/lib/server/domains/settings/settings.widget'
 import { getAllUserVotedPostIds } from '@/lib/server/domains/posts/post.public'
+import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
 
 // Accept either legacy HMAC fields or a JWT ssoToken
 const identifySchema = z
@@ -260,13 +261,19 @@ export const Route = createFileRoute('/api/widget/identify')({
         // No Set-Cookie — the widget sends the token as Bearer header.
         // An unsigned cookie here would poison Better Auth's signed-cookie
         // lookup in same-site deployments (#99).
+        // Resolve avatar: custom upload (S3) takes priority over OAuth URL
+        const avatarUrl =
+          (userRecord.imageKey ? getPublicUrlOrNull(userRecord.imageKey) : null) ??
+          userRecord.image ??
+          null
+
         return Response.json({
           sessionToken,
           user: {
             id: userRecord.id,
             name: userRecord.name,
             email: userRecord.email,
-            avatarUrl: userRecord.image ?? null,
+            avatarUrl,
           },
           votedPostIds,
         })
