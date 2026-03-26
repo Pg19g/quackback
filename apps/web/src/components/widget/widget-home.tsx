@@ -358,8 +358,10 @@ export function WidgetHome({
                 placeholder="What's your idea?"
                 value={title}
                 onChange={(e) => {
-                  setTitle(e.target.value)
-                  if (!expanded && e.target.value) setExpanded(true)
+                  const val = e.target.value
+                  setTitle(val)
+                  if (val && !expanded) setExpanded(true)
+                  if (!val && expanded && !content.trim()) setExpanded(false)
                 }}
                 onFocus={() => {
                   if (title && !expanded) setExpanded(true)
