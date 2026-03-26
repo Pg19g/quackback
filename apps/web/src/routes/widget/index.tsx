@@ -46,6 +46,7 @@ export const Route = createFileRoute('/widget/')({
         commentCount: p.commentCount,
         board: p.board,
       })),
+      postsHasMore: portalData.posts.hasMore,
       statuses: portalData.statuses.map((s) => ({
         id: s.id as string,
         name: s.name,
@@ -84,7 +85,7 @@ interface SuccessPost {
 }
 
 function WidgetPage() {
-  const { posts, statuses, boards, orgSlug, features, tabs } = Route.useLoaderData()
+  const { posts, postsHasMore, statuses, boards, orgSlug, features, tabs } = Route.useLoaderData()
   const { isIdentified, ensureSession } = useWidgetAuth()
   const canVote = isIdentified || features.anonymousVoting
 
@@ -193,6 +194,7 @@ function WidgetPage() {
       >
         <WidgetHome
           initialPosts={allPosts}
+          initialHasMore={postsHasMore}
           statuses={statuses}
           boards={boards}
           onPostSelect={handlePostSelect}

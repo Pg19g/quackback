@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Squares2X2Icon, PencilIcon } from '@heroicons/react/24/solid'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
@@ -12,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { listPublicPostsFn } from '@/lib/server/functions/public-posts'
+import { useInfiniteScroll } from '@/lib/client/hooks/use-infinite-scroll'
 import { WidgetVoteButton } from './widget-vote-button'
 import { useWidgetAuth } from './widget-auth-provider'
 import type { PostId } from '@quackback/ids'
@@ -39,6 +42,7 @@ interface BoardInfo {
 
 interface WidgetHomeProps {
   initialPosts: WidgetPost[]
+  initialHasMore?: boolean
   statuses: StatusInfo[]
   boards: BoardInfo[]
   onPostSelect?: (postId: string) => void
@@ -130,6 +134,7 @@ function WidgetPostRow({
 
 export function WidgetHome({
   initialPosts,
+  initialHasMore = false,
   statuses,
   boards,
   onPostSelect,
@@ -165,6 +170,47 @@ export function WidgetHome({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   const statusMap = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses])
+
+  // Infinite query for popular ideas — page 1 seeded from SSR, pages 2+ fetched on scroll
+  const {
+    data: postsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['widget', 'posts', 'popular'],
+    queryFn: ({ pageParam }) =>
+      listPublicPostsFn({ data: { sort: 'top', page: pageParam, limit: 20 } }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.hasMore ? allPages.length + 1 : undefined),
+    initialData: {
+      pages: [{ items: initialPosts, total: -1, hasMore: initialHasMore }],
+      pageParams: [1],
+    },
+  })
+
+  const allPopularPosts: WidgetPost[] = useMemo(
+    () =>
+      postsData?.pages.flatMap((page) =>
+        page.items.map(
+          (p): WidgetPost => ({
+            id: p.id,
+            title: p.title,
+            voteCount: p.voteCount,
+            statusId: p.statusId ?? null,
+            commentCount: 'commentCount' in p ? (p.commentCount as number) : 0,
+            board: 'board' in p ? (p.board as WidgetPost['board']) : undefined,
+          })
+        )
+      ) ?? [],
+    [postsData]
+  )
+
+  const postsSentinelRef = useInfiniteScroll({
+    hasMore: hasNextPage ?? false,
+    isFetching: isFetchingNextPage,
+    onLoadMore: fetchNextPage,
+  })
 
   const handleAuthRequired = useCallback(
     (postId: string) => {
@@ -525,7 +571,7 @@ export function WidgetHome({
               Popular ideas
             </p>
 
-            {initialPosts.length === 0 && (
+            {allPopularPosts.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <LightBulbIcon className="w-8 h-8 text-muted-foreground/30 mb-2" />
                 <p className="text-sm font-medium text-muted-foreground/70">No ideas yet</p>
@@ -535,9 +581,9 @@ export function WidgetHome({
               </div>
             )}
 
-            {initialPosts.length > 0 && (
+            {allPopularPosts.length > 0 && (
               <div className="space-y-0.5">
-                {initialPosts.map((post) => (
+                {allPopularPosts.map((post) => (
                   <WidgetPostRow
                     key={post.id}
                     post={post}
@@ -549,6 +595,13 @@ export function WidgetHome({
                     onSelect={() => onPostSelect?.(post.id)}
                   />
                 ))}
+                {hasNextPage && (
+                  <div ref={postsSentinelRef} className="flex justify-center py-2">
+                    {isFetchingNextPage && (
+                      <span className="text-[10px] text-muted-foreground/50">Loading...</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

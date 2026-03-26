@@ -3,6 +3,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { publicChangelogQueries } from '@/lib/client/queries/changelog'
+import { useInfiniteScroll } from '@/lib/client/hooks/use-infinite-scroll'
 import { NewspaperIcon } from '@heroicons/react/24/outline'
 
 function formatDate(iso: string) {
@@ -14,7 +15,6 @@ function formatDate(iso: string) {
 }
 
 function truncateContent(content: string, maxLength = 120): string {
-  // Strip markdown headings and formatting for preview
   const plain = content
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/\*\*(.*?)\*\*/g, '$1')
@@ -38,6 +38,12 @@ export function WidgetChangelog({ onEntrySelect }: WidgetChangelogProps) {
   )
 
   const entries = data?.pages.flatMap((page) => page.items) ?? []
+
+  const sentinelRef = useInfiniteScroll({
+    hasMore: hasNextPage ?? false,
+    isFetching: isFetchingNextPage,
+    onLoadMore: fetchNextPage,
+  })
 
   if (isLoading) {
     return (
@@ -86,15 +92,10 @@ export function WidgetChangelog({ onEntrySelect }: WidgetChangelogProps) {
         </div>
 
         {hasNextPage && (
-          <div className="flex justify-center pt-2 pb-1">
-            <button
-              type="button"
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              {isFetchingNextPage ? 'Loading...' : 'Load more'}
-            </button>
+          <div ref={sentinelRef} className="flex justify-center py-2">
+            {isFetchingNextPage && (
+              <span className="text-[10px] text-muted-foreground/50">Loading...</span>
+            )}
           </div>
         )}
       </ScrollArea>
