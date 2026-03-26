@@ -228,6 +228,13 @@ export {
   aiUsageLog,
   // Schema tables - pipeline log
   pipelineLog,
+  // Schema tables - knowledge base
+  knowledgebaseCategories,
+  knowledgebaseCategoriesRelations,
+  knowledgebaseArticles,
+  knowledgebaseArticlesRelations,
+  knowledgebaseArticleFeedback,
+  knowledgebaseArticleFeedbackRelations,
   // Types/constants
   REACTION_EMOJIS,
   USE_CASE_TYPES,
