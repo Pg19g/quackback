@@ -347,8 +347,11 @@ export function MetadataSidebar({
       setBoardOpen(false)
       return
     }
-    setBoardOpen(false)
-    await onBoardChange(boardId)
+    try {
+      await onBoardChange(boardId)
+    } finally {
+      setBoardOpen(false)
+    }
   }
 
   async function handleRemoveFromRoadmap(roadmapId: RoadmapId) {
