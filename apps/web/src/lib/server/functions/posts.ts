@@ -506,12 +506,14 @@ export const changePostBoardFn = createServerFn({ method: 'POST' })
     console.log(`[fn:posts] changePostBoardFn: id=${data.id}, boardId=${data.boardId}`)
     try {
       const auth = await requireAuth({ roles: ['admin', 'member'] })
-      return await changeBoard(data.id as PostId, data.boardId as BoardId, {
+      const result = await changeBoard(data.id as PostId, data.boardId as BoardId, {
         principalId: auth.principal.id as PrincipalId,
         userId: auth.user.id as UserId,
         email: auth.user.email,
         displayName: auth.user.name,
       })
+      console.log(`[fn:posts] changePostBoardFn: updated id=${data.id}`)
+      return serializePostDates(result)
     } catch (error) {
       console.error(`[fn:posts] ❌ changePostBoardFn failed:`, error)
       throw error
