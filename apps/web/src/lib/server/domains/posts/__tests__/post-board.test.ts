@@ -41,6 +41,7 @@ describe('changeBoard', () => {
     mockPostsFindFirst.mockReset()
     mockBoardsFindFirst.mockReset()
     updateReturning.mockReset()
+    dbUpdate.mockClear()
   })
 
   it('throws POST_NOT_FOUND when post does not exist', async () => {
@@ -53,6 +54,7 @@ describe('changeBoard', () => {
 
   it('throws BOARD_NOT_FOUND when current board does not exist', async () => {
     mockPostsFindFirst.mockResolvedValue({ id: 'post_123', boardId: 'board_old' })
+    // Promise.all order: [currentBoard, newBoard]
     mockBoardsFindFirst
       .mockResolvedValueOnce(null) // currentBoard
       .mockResolvedValueOnce({ id: 'board_new', name: 'New Board', slug: 'new' })
@@ -64,6 +66,7 @@ describe('changeBoard', () => {
 
   it('throws BOARD_NOT_FOUND when new board does not exist', async () => {
     mockPostsFindFirst.mockResolvedValue({ id: 'post_123', boardId: 'board_old' })
+    // Promise.all order: [currentBoard, newBoard]
     mockBoardsFindFirst
       .mockResolvedValueOnce({ id: 'board_old', name: 'Old Board', slug: 'old' })
       .mockResolvedValueOnce(null) // newBoard
@@ -117,6 +120,16 @@ describe('changeBoard', () => {
     await expect(changeBoard('post_123' as PostId, 'board_new' as BoardId, actor)).rejects.toThrow(
       'Post with ID post_123 not found'
     )
+    expect(createActivity).not.toHaveBeenCalled()
+  })
+
+  it('returns existing post without update when board is unchanged', async () => {
+    const existingPost = { id: 'post_123', boardId: 'board_same', title: 'Test' }
+    mockPostsFindFirst.mockResolvedValue(existingPost)
+    const { changeBoard } = await import('../post.board')
+    const result = await changeBoard('post_123' as PostId, 'board_same' as BoardId, actor)
+    expect(result).toEqual(existingPost)
+    expect(dbUpdate).not.toHaveBeenCalled()
     expect(createActivity).not.toHaveBeenCalled()
   })
 })
