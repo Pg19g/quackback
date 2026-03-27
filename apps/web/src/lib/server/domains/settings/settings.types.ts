@@ -360,6 +360,7 @@ export const FEATURE_FLAG_REGISTRY: Record<
   },
   aiFeedbackExtraction: {
     label: 'AI Feedback Extraction',
-    description: 'Automatically extract and categorize feedback from connected sources using AI.',
+    description:
+      'Automatically extract and categorize feedback from connected sources using large language models.',
   },
 }
