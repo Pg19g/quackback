@@ -196,26 +196,26 @@ export const getAnalyticsData = createServerFn({ method: 'GET' })
       total: r.total,
     }))
 
-    // -- Changelog stats --
-    const changelogResult = await db
-      .select({
-        totalViews: sum(changelogEntries.viewCount),
-      })
-      .from(changelogEntries)
-      .where(isNull(changelogEntries.deletedAt))
+    // -- Changelog stats (single transaction to keep totalViews consistent with topEntries) --
+    const [changelogResult, topChangelogEntries] = await db.transaction(async (tx) => {
+      const totals = await tx
+        .select({ totalViews: sum(changelogEntries.viewCount) })
+        .from(changelogEntries)
+        .where(isNull(changelogEntries.deletedAt))
+      const top = await tx
+        .select({
+          id: changelogEntries.id,
+          title: changelogEntries.title,
+          viewCount: changelogEntries.viewCount,
+        })
+        .from(changelogEntries)
+        .where(isNull(changelogEntries.deletedAt))
+        .orderBy(desc(changelogEntries.viewCount))
+        .limit(5)
+      return [totals, top] as const
+    })
 
     const totalViews = Number(changelogResult[0]?.totalViews ?? 0)
-
-    const topChangelogEntries = await db
-      .select({
-        id: changelogEntries.id,
-        title: changelogEntries.title,
-        viewCount: changelogEntries.viewCount,
-      })
-      .from(changelogEntries)
-      .where(isNull(changelogEntries.deletedAt))
-      .orderBy(desc(changelogEntries.viewCount))
-      .limit(5)
 
     // -- Computed at timestamp --
     const computedAt = latestRow?.computedAt?.toISOString() ?? null

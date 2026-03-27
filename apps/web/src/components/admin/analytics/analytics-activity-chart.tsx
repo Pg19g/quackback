@@ -20,11 +20,9 @@ const METRICS = [
 
 type MetricKey = (typeof METRICS)[number]['key']
 
-const chartConfig: ChartConfig = {
-  posts: { label: 'Posts', color: 'hsl(var(--chart-1))' },
-  votes: { label: 'Votes', color: 'hsl(var(--chart-2))' },
-  comments: { label: 'Comments', color: 'hsl(var(--chart-3))' },
-}
+const chartConfig = Object.fromEntries(
+  METRICS.map(({ key, label, color }) => [key, { label, color }])
+) as ChartConfig
 
 function formatDate(dateStr: string) {
   const date = new Date(dateStr + 'T00:00:00')

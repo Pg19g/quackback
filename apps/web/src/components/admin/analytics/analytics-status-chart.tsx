@@ -23,7 +23,7 @@ export function AnalyticsStatusChart({ data }: StatusChartProps) {
     return config
   }, [sorted])
 
-  if (sorted.length === 0) {
+  if (sorted.length === 0 || total === 0) {
     return (
       <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
         No data for this period

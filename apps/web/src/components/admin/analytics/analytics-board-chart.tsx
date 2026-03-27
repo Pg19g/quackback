@@ -7,7 +7,7 @@ interface BoardChartProps {
 export function AnalyticsBoardChart({ data }: BoardChartProps) {
   const sorted = useMemo(() => [...data].sort((a, b) => b.count - a.count), [data])
   const total = useMemo(() => sorted.reduce((sum, d) => sum + d.count, 0), [sorted])
-  const maxCount = sorted[0]?.count ?? 1
+  const maxCount = Math.max(...sorted.map((d) => d.count), 1)
 
   if (sorted.length === 0) {
     return (
