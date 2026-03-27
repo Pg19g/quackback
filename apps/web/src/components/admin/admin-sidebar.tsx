@@ -9,6 +9,8 @@ import {
   Bars3Icon,
   GlobeAltIcon,
   DocumentTextIcon,
+  BookOpenIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/solid'
 import { useQuery } from '@tanstack/react-query'
 import { feedbackQueries } from '@/lib/client/queries/feedback'
@@ -41,6 +43,8 @@ const navItems = [
   { label: 'Feedback', href: '/admin/feedback', icon: ChatBubbleLeftIcon, hasBadge: true },
   { label: 'Roadmap', href: '/admin/roadmap', icon: MapIcon },
   { label: 'Changelog', href: '/admin/changelog', icon: DocumentTextIcon },
+  { label: 'Help Center', href: '/admin/help-center', icon: BookOpenIcon },
+  { label: 'Analytics', href: '/admin/analytics', icon: ChartBarIcon },
   { label: 'Users', href: '/admin/users', icon: UsersIcon },
 ]
 
