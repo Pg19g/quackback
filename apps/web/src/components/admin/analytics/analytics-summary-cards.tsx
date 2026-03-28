@@ -3,10 +3,10 @@ import { cn } from '@/lib/shared/utils'
 export type MetricKey = 'posts' | 'votes' | 'comments' | 'users'
 
 export const METRICS: Array<{ key: MetricKey; label: string; color: string }> = [
-  { key: 'posts', label: 'Posts', color: 'hsl(var(--chart-1))' },
-  { key: 'votes', label: 'Votes', color: 'hsl(var(--chart-2))' },
-  { key: 'comments', label: 'Comments', color: 'hsl(var(--chart-3))' },
-  { key: 'users', label: 'Users', color: 'hsl(var(--chart-4))' },
+  { key: 'posts', label: 'Posts', color: 'var(--chart-1)' },
+  { key: 'votes', label: 'Votes', color: 'var(--chart-2)' },
+  { key: 'comments', label: 'Comments', color: 'var(--chart-3)' },
+  { key: 'users', label: 'Users', color: 'var(--chart-4)' },
 ]
 
 interface MetricBarProps {
