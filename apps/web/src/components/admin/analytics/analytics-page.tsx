@@ -106,7 +106,7 @@ export function AnalyticsPage() {
             ) : !data ? null : (
               <>
                 {section === 'overview' && (
-                  <Card className="overflow-hidden">
+                  <Card className="overflow-hidden py-0">
                     <AnalyticsSummaryCards
                       summary={data.summary}
                       activeMetric={activeMetric}
@@ -188,7 +188,7 @@ export function AnalyticsPage() {
 
 function SectionSkeleton() {
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden py-0">
       <div className="flex divide-x divide-border/50">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex-1 px-5 py-4">
