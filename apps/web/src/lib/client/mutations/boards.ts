@@ -16,10 +16,8 @@ import {
 import type { Board } from '@/lib/shared/db-types'
 import type { BoardId } from '@quackback/ids'
 import { boardKeys } from '@/lib/client/hooks/use-boards-query'
+import { adminQueries } from '@/lib/client/queries/admin'
 import { slugify } from '@/lib/shared/utils'
-
-/** Query key used by the admin settings boards page (from admin.ts queries) */
-const adminBoardsKey = ['admin', 'settings', 'boards'] as const
 
 // ============================================================================
 // Mutation Hooks
@@ -61,7 +59,7 @@ export function useCreateBoard() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: boardKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: adminBoardsKey })
+      queryClient.invalidateQueries({ queryKey: adminQueries.boardsForSettings().queryKey })
     },
   })
 }
@@ -122,7 +120,7 @@ export function useUpdateBoard() {
     onSettled: (_data, _error, input) => {
       queryClient.invalidateQueries({ queryKey: boardKeys.lists() })
       queryClient.invalidateQueries({ queryKey: boardKeys.detail(input.id as BoardId) })
-      queryClient.invalidateQueries({ queryKey: adminBoardsKey })
+      queryClient.invalidateQueries({ queryKey: adminQueries.boardsForSettings().queryKey })
     },
   })
 }
@@ -154,7 +152,7 @@ export function useDeleteBoard() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: boardKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: adminBoardsKey })
+      queryClient.invalidateQueries({ queryKey: adminQueries.boardsForSettings().queryKey })
     },
   })
 }

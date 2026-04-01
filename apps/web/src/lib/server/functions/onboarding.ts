@@ -9,6 +9,7 @@ import { getSettings } from './workspace'
 import { syncPrincipalProfile } from '@/lib/server/domains/principals/principal.service'
 import { listBoards } from '@/lib/server/domains/boards/board.service'
 import { db, settings, principal, user, postStatuses, eq, DEFAULT_STATUSES } from '@/lib/server/db'
+import { slugify } from '@/lib/shared/utils'
 
 /**
  * Server functions for onboarding workflow.
@@ -164,10 +165,7 @@ export const setupWorkspaceFn = createServerFn({ method: 'POST' })
         console.log(`[fn:onboarding] setupWorkspaceFn: updating existing settings`)
 
         // Generate slug from workspace name
-        const slug = workspaceName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '')
+        const slug = slugify(workspaceName)
 
         if (slug.length < 2) {
           throw new Error('Invalid workspace name - cannot generate valid slug')
@@ -213,10 +211,7 @@ export const setupWorkspaceFn = createServerFn({ method: 'POST' })
       } else {
         // Self-hosted: create settings from scratch
         // Generate slug from workspace name
-        const slug = workspaceName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '')
+        const slug = slugify(workspaceName)
 
         if (slug.length < 2) {
           throw new Error('Invalid workspace name - cannot generate valid slug')
