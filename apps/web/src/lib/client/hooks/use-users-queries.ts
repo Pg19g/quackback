@@ -71,6 +71,7 @@ async function fetchPortalUsers(
       page,
       limit: 20,
       segmentIds: filters.segmentIds,
+      includeAnonymous: filters.includeAnonymous,
     },
   })) as PortalUserListResultView
 }
@@ -101,6 +102,7 @@ export function usePortalUsers({ filters, initialData }: UsePortalUsersOptions) 
     filters.voteCount ||
     filters.commentCount ||
     filters.customAttrs ||
+    filters.includeAnonymous ||
     (filters.segmentIds && filters.segmentIds.length > 0)
   )
   const useInitialData = initialData && !hasActiveFilters

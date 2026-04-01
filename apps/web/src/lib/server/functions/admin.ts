@@ -112,6 +112,7 @@ const listPortalUsersSchema = z.object({
   page: z.number().optional(),
   limit: z.number().optional(),
   segmentIds: z.array(z.string()).optional(),
+  includeAnonymous: z.boolean().optional(),
 })
 
 const portalUserByIdSchema = z.object({
@@ -608,6 +609,7 @@ export const listPortalUsersFn = createServerFn({ method: 'GET' })
         page: data.page,
         limit: data.limit,
         segmentIds: data.segmentIds as SegmentId[] | undefined,
+        includeAnonymous: data.includeAnonymous,
       })
 
       console.log(`[fn:admin] listPortalUsersFn: count=${result.items.length}`)

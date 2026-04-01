@@ -124,6 +124,7 @@ export async function listPortalUsers(
       page = 1,
       limit = 20,
       segmentIds,
+      includeAnonymous = false,
     } = params
 
     // Pre-aggregate activity counts in subqueries (executed once, not per-row)
@@ -160,6 +161,11 @@ export async function listPortalUsers(
 
     // Build conditions array - filter for role='user' (portal users only)
     const conditions = [eq(principal.role, 'user')]
+
+    // Exclude anonymous users by default (principal.type='anonymous')
+    if (!includeAnonymous) {
+      conditions.push(eq(principal.type, 'user'))
+    }
 
     if (search) {
       conditions.push(or(ilike(user.name, `%${search}%`), ilike(user.email, `%${search}%`))!)

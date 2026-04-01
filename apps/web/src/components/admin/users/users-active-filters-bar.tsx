@@ -9,6 +9,7 @@ import {
   HandThumbUpIcon,
   ChatBubbleLeftIcon,
   AdjustmentsHorizontalIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/solid'
 import { cn } from '@/lib/shared/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -50,6 +51,7 @@ type FilterCategory =
   | 'voteCount'
   | 'commentCount'
   | 'customAttr'
+  | 'includeAnonymous'
 
 interface FilterCategoryDef {
   key: FilterCategory
@@ -64,6 +66,7 @@ const FILTER_CATEGORIES: FilterCategoryDef[] = [
   { key: 'postCount', label: 'Post Count', icon: DocumentTextIcon },
   { key: 'voteCount', label: 'Vote Count', icon: HandThumbUpIcon },
   { key: 'commentCount', label: 'Comment Count', icon: ChatBubbleLeftIcon },
+  { key: 'includeAnonymous', label: 'Include Anonymous', icon: UserGroupIcon },
 ]
 
 function getDateFromDaysAgo(daysAgo: number): string {
@@ -328,6 +331,7 @@ function AddFilterButton({
     if (cat.key === 'postCount' && filters.postCount) return false
     if (cat.key === 'voteCount' && filters.voteCount) return false
     if (cat.key === 'commentCount' && filters.commentCount) return false
+    if (cat.key === 'includeAnonymous' && filters.includeAnonymous) return false
     return true
   })
 
@@ -403,7 +407,14 @@ function AddFilterButton({
                 <button
                   key={category.key}
                   type="button"
-                  onClick={() => setActiveCategory(category.key)}
+                  onClick={() => {
+                    if (category.key === 'includeAnonymous') {
+                      onFiltersChange({ includeAnonymous: true })
+                      closePopover()
+                      return
+                    }
+                    setActiveCategory(category.key)
+                  }}
                   className={cn(
                     'w-full flex items-center justify-between gap-2 px-2.5 py-1.5',
                     'text-xs text-left',
@@ -414,7 +425,9 @@ function AddFilterButton({
                     <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                     {category.label}
                   </span>
-                  <ChevronRightIcon className="h-3 w-3 text-muted-foreground" />
+                  {category.key !== 'includeAnonymous' && (
+                    <ChevronRightIcon className="h-3 w-3 text-muted-foreground" />
+                  )}
                 </button>
               )
             })}
@@ -539,6 +552,7 @@ function getFilterIcon(type: string) {
     voteCount: HandThumbUpIcon,
     commentCount: ChatBubbleLeftIcon,
     customAttr: AdjustmentsHorizontalIcon,
+    includeAnonymous: UserGroupIcon,
   }
   return icons[type] ?? AdjustmentsHorizontalIcon
 }
@@ -557,6 +571,18 @@ function computeActiveFilters(
   onFiltersChange: (updates: Partial<UsersFilters>) => void
 ): ActiveFilter[] {
   const result: ActiveFilter[] = []
+
+  // Include anonymous filter
+  if (filters.includeAnonymous) {
+    result.push({
+      key: 'includeAnonymous',
+      type: 'includeAnonymous',
+      label: 'Users:',
+      value: 'Including anonymous',
+      valueId: 'includeAnonymous',
+      onRemove: () => onFiltersChange({ includeAnonymous: undefined }),
+    })
+  }
 
   // Verified filter
   const verifiedOptions: FilterOption[] = [
