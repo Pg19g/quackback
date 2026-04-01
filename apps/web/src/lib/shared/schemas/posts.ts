@@ -5,16 +5,11 @@ import type { TiptapContent as DbTiptapContent } from '@/lib/shared/db-types'
 /**
  * TipTap mark schema - validates mark types and their attributes
  */
+const tiptapAttrValue = z.union([z.string(), z.number(), z.boolean()])
+
 const tiptapMarkSchema = z.object({
   type: z.enum(['bold', 'italic', 'underline', 'strike', 'code', 'link']),
-  attrs: z
-    .object({
-      href: z.string().optional(),
-      target: z.string().optional(),
-      rel: z.string().optional(),
-    })
-    .passthrough()
-    .optional(),
+  attrs: z.record(z.string(), tiptapAttrValue).optional(),
 })
 
 /**
@@ -53,7 +48,9 @@ const tiptapNodeSchema: z.ZodType<DbTiptapContent> = z.lazy(() =>
     content: z.array(tiptapNodeSchema).optional(),
     text: z.string().optional(),
     marks: z.array(tiptapMarkSchema).optional(),
-    attrs: z.record(z.string(), z.unknown()).optional(),
+    attrs: z
+      .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+      .optional(),
   })
 )
 
@@ -61,7 +58,7 @@ const tiptapNodeSchema: z.ZodType<DbTiptapContent> = z.lazy(() =>
  * TipTap JSON content schema - validates the top-level document structure
  * and recursively validates all child nodes.
  */
-export const tiptapContentSchema = z.object({
+export const tiptapContentSchema: z.ZodType<DbTiptapContent> = z.object({
   type: z.literal('doc'),
   content: z.array(tiptapNodeSchema).optional(),
 })
