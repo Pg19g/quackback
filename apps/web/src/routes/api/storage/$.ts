@@ -1,5 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+// In-memory cache for proxied assets (e.g. email logos) to avoid S3 round-trips.
+// Entries expire after 1 hour. Logo images are typically < 50 KB so memory is negligible.
+const proxyCache = new Map<string, { data: Uint8Array; contentType: string; cachedAt: number }>()
+const PROXY_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
 export const Route = createFileRoute('/api/storage/$')({
   server: {
     handlers: {
@@ -30,15 +35,33 @@ export const Route = createFileRoute('/api/storage/$')({
           return Response.json({ error: 'Invalid storage key' }, { status: 400 })
         }
 
-        try {
-          if (config.s3Proxy) {
-            const { body, contentType } = await getS3Object(key)
+        // Force proxy for email embeds (?email=1) since email clients don't follow redirects
+        const forceProxy = url.searchParams.has('email')
 
-            return new Response(body, {
+        try {
+          if (config.s3Proxy || forceProxy) {
+            // Serve from cache if fresh
+            const cached = proxyCache.get(key)
+            if (cached && Date.now() - cached.cachedAt < PROXY_CACHE_TTL) {
+              return new Response(cached.data, {
+                status: 200,
+                headers: {
+                  'Content-Type': cached.contentType,
+                  'Cache-Control': 'public, max-age=31536000, immutable',
+                },
+              })
+            }
+
+            const { body, contentType } = await getS3Object(key)
+            const data = new Uint8Array(await new Response(body).arrayBuffer())
+
+            proxyCache.set(key, { data, contentType, cachedAt: Date.now() })
+
+            return new Response(data, {
               status: 200,
               headers: {
                 'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=86400',
+                'Cache-Control': 'public, max-age=31536000, immutable',
               },
             })
           }

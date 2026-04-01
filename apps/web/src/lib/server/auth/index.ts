@@ -168,9 +168,9 @@ async function createAuth() {
           )
           return
         }
-        const { getPublicUrlOrNull } = await import('@/lib/server/storage/s3')
+        const { getEmailSafeUrl } = await import('@/lib/server/storage/s3')
         const settings = await db.query.settings.findFirst({ columns: { logoKey: true } })
-        const logoUrl = getPublicUrlOrNull(settings?.logoKey) ?? undefined
+        const logoUrl = getEmailSafeUrl(settings?.logoKey) ?? undefined
         await sendPasswordResetEmail({ to: user.email, resetLink: url, logoUrl })
       },
       resetPasswordTokenExpiresIn: 60 * 60 * 24, // 24 hours
@@ -263,9 +263,9 @@ async function createAuth() {
               `[auth] Email OTP requested for ${email} but email is not configured. OTP will not be delivered.`
             )
           }
-          const { getPublicUrlOrNull } = await import('@/lib/server/storage/s3')
+          const { getEmailSafeUrl } = await import('@/lib/server/storage/s3')
           const settings = await db.query.settings.findFirst({ columns: { logoKey: true } })
-          const logoUrl = getPublicUrlOrNull(settings?.logoKey) ?? undefined
+          const logoUrl = getEmailSafeUrl(settings?.logoKey) ?? undefined
           await sendSigninCodeEmail({ to: email, code: otp, logoUrl })
         },
         otpLength: 6,

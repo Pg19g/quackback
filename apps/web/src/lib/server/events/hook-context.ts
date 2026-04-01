@@ -7,7 +7,7 @@
 
 import { db } from '@/lib/server/db'
 import { getBaseUrl } from '@/lib/server/config'
-import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
+import { getEmailSafeUrl } from '@/lib/server/storage/s3'
 
 /**
  * Centralized hook context containing workspace data needed by all hooks.
@@ -40,6 +40,6 @@ export async function buildHookContext(): Promise<HookContext | null> {
   return {
     workspaceName: settings.name,
     portalBaseUrl: getBaseUrl(),
-    logoUrl: getPublicUrlOrNull(settings.logoKey),
+    logoUrl: getEmailSafeUrl(settings.logoKey),
   }
 }

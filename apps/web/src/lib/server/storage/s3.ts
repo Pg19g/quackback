@@ -345,6 +345,25 @@ export function getPublicUrlOrNull(key: string | null | undefined): string | nul
 }
 
 /**
+ * Get an email-safe URL for a storage key.
+ * Email clients often don't follow redirects, so when there's no S3_PUBLIC_URL
+ * this returns a proxy URL (?email=1) that streams bytes directly.
+ * Returns null if the key is null/undefined or S3 is not configured.
+ */
+export function getEmailSafeUrl(key: string | null | undefined): string | null {
+  if (!key) return null
+  if (!isS3Configured()) return null
+
+  const s3Config = getS3Config()
+  if (s3Config.publicUrl) {
+    return buildPublicUrl(s3Config, key)
+  }
+
+  // Force proxy mode so email clients get bytes directly (no 302 redirect)
+  return `${config.baseUrl.replace(/\/$/, '')}/api/storage/${key}?email=1`
+}
+
+/**
  * Get the public URL for a storage key.
  * Throws if the key is null/undefined or S3 is not configured.
  */

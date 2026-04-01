@@ -944,8 +944,8 @@ export const sendInvitationFn = createServerFn({ method: 'POST' })
       const callbackURL = `/complete-signup/${invitationId}`
       const inviteLink = await generateInvitationMagicLink(email, callbackURL, portalUrl)
 
-      const { getPublicUrlOrNull } = await import('@/lib/server/storage/s3')
-      const logoUrl = getPublicUrlOrNull(auth.settings.logoKey) ?? undefined
+      const { getEmailSafeUrl } = await import('@/lib/server/storage/s3')
+      const logoUrl = getEmailSafeUrl(auth.settings.logoKey) ?? undefined
       const result = await sendInvitationEmail({
         to: email,
         invitedByName: auth.user.name,
@@ -1028,8 +1028,8 @@ export const resendInvitationFn = createServerFn({ method: 'POST' })
         portalUrl
       )
 
-      const { getPublicUrlOrNull } = await import('@/lib/server/storage/s3')
-      const logoUrl = getPublicUrlOrNull(auth.settings.logoKey) ?? undefined
+      const { getEmailSafeUrl } = await import('@/lib/server/storage/s3')
+      const logoUrl = getEmailSafeUrl(auth.settings.logoKey) ?? undefined
       const result = await sendInvitationEmail({
         to: invitationRecord.email,
         invitedByName: auth.user.name,

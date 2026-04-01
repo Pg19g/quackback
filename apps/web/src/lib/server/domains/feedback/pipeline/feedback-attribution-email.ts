@@ -8,7 +8,7 @@
 
 import { db, eq, principal, user, posts } from '@/lib/server/db'
 import { getBaseUrl } from '@/lib/server/config'
-import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
+import { getEmailSafeUrl } from '@/lib/server/storage/s3'
 import { generateUnsubscribeToken } from '@/lib/server/domains/subscriptions/subscription.service'
 import { sendFeedbackLinkedEmail } from '@quackback/email'
 import type { PrincipalId, PostId } from '@quackback/ids'
@@ -79,7 +79,7 @@ export async function sendFeedbackAttributionEmail(
       workspaceName,
       unsubscribeUrl,
       attributedByName,
-      logoUrl: getPublicUrlOrNull(workspace?.logoKey) ?? undefined,
+      logoUrl: getEmailSafeUrl(workspace?.logoKey) ?? undefined,
     })
   } catch (error) {
     // Never fail the accept flow due to email errors
