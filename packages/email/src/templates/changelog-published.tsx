@@ -1,25 +1,6 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from '@react-email/components'
-import {
-  layout,
-  typography,
-  button,
-  utils,
-  branding,
-  colors,
-  DEFAULT_LOGO_URL,
-} from './shared-styles'
+import { Button, Heading, Section, Text } from '@react-email/components'
+import { EmailLayout, NotificationFooter } from './email-layout'
+import { typography, button, colors } from './shared-styles'
 
 interface ChangelogPublishedEmailProps {
   changelogTitle: string
@@ -39,59 +20,48 @@ export function ChangelogPublishedEmail({
   logoUrl,
 }: ChangelogPublishedEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>
-        New update from {organizationName}: {changelogTitle}
-      </Preview>
-      <Body style={layout.main}>
-        <Container style={layout.container}>
-          {/* Logo */}
-          <Section style={branding.logoContainer}>
-            <Img src={logoUrl ?? DEFAULT_LOGO_URL} alt={organizationName} style={branding.logo} />
-          </Section>
+    <EmailLayout
+      preview={`New update from ${organizationName}: ${changelogTitle}`}
+      logoUrl={logoUrl}
+      logoAlt={organizationName}
+    >
+      {/* Content */}
+      <Heading style={typography.h1}>New update published</Heading>
+      <Text style={typography.text}>
+        {organizationName} just published an update related to your feedback.
+      </Text>
 
-          {/* Content */}
-          <Heading style={typography.h1}>New update published</Heading>
-          <Text style={typography.text}>
-            {organizationName} just published an update related to your feedback.
+      {/* Changelog Title */}
+      <Section
+        style={{
+          backgroundColor: colors.surfaceMuted,
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+        }}
+      >
+        <Text style={{ ...typography.text, marginTop: '0', marginBottom: '0', fontWeight: '600' }}>
+          {changelogTitle}
+        </Text>
+        {contentPreview && (
+          <Text style={{ ...typography.textSmall, marginTop: '8px', marginBottom: '0' }}>
+            {contentPreview}
           </Text>
+        )}
+      </Section>
 
-          {/* Changelog Title */}
-          <Section
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: '8px',
-              padding: '16px 20px',
-              marginBottom: '24px',
-            }}
-          >
-            <Text style={{ ...typography.text, margin: 0, fontWeight: '600' }}>
-              {changelogTitle}
-            </Text>
-            {contentPreview && (
-              <Text style={{ ...typography.textSmall, margin: '8px 0 0' }}>{contentPreview}</Text>
-            )}
-          </Section>
+      {/* CTA Button */}
+      <Section style={{ textAlign: 'center', marginTop: '32px', marginBottom: '32px' }}>
+        <Button style={button.primary} href={changelogUrl}>
+          View Update
+        </Button>
+      </Section>
 
-          {/* CTA Button */}
-          <Section style={{ textAlign: 'center', margin: '32px 0' }}>
-            <Button style={button.primary} href={changelogUrl}>
-              View Update
-            </Button>
-          </Section>
-
-          {/* Footer */}
-          <Text style={typography.footer}>
-            You received this email because you submitted or subscribed to feedback related to this
-            update.
-            <br />
-            <Link href={unsubscribeUrl} style={{ ...utils.link, fontSize: '13px' }}>
-              Unsubscribe from this post
-            </Link>
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      {/* Footer */}
+      <NotificationFooter
+        reason="You received this email because you submitted or subscribed to feedback related to this update."
+        unsubscribeUrl={unsubscribeUrl}
+      />
+    </EmailLayout>
   )
 }

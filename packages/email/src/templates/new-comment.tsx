@@ -1,25 +1,6 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from '@react-email/components'
-import {
-  layout,
-  typography,
-  button,
-  utils,
-  branding,
-  colors,
-  DEFAULT_LOGO_URL,
-} from './shared-styles'
+import { Button, Column, Heading, Row, Section, Text } from '@react-email/components'
+import { EmailLayout, NotificationFooter } from './email-layout'
+import { typography, button, colors } from './shared-styles'
 
 interface NewCommentEmailProps {
   postTitle: string
@@ -43,84 +24,71 @@ export function NewCommentEmail({
   logoUrl,
 }: NewCommentEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>New comment on &quot;{postTitle}&quot;</Preview>
-      <Body style={layout.main}>
-        <Container style={layout.container}>
-          {/* Logo */}
-          <Section style={branding.logoContainer}>
-            <Img src={logoUrl ?? DEFAULT_LOGO_URL} alt={organizationName} style={branding.logo} />
-          </Section>
+    <EmailLayout
+      preview={`New comment on "${postTitle}"`}
+      logoUrl={logoUrl}
+      logoAlt={organizationName}
+    >
+      {/* Content */}
+      <Heading style={typography.h1}>New comment on your feedback</Heading>
+      <Text style={typography.text}>
+        {commenterName}
+        {isTeamMember ? ' (Team)' : ''} commented on your feedback in {organizationName}.
+      </Text>
 
-          {/* Content */}
-          <Heading style={typography.h1}>New comment on your feedback</Heading>
-          <Text style={typography.text}>
-            {commenterName}
-            {isTeamMember && (
-              <span
-                style={{
-                  backgroundColor: colors.primary,
-                  color: '#ffffff',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  marginLeft: '8px',
-                  verticalAlign: 'middle',
-                }}
-              >
-                Team
-              </span>
-            )}{' '}
-            commented on your feedback in {organizationName}.
-          </Text>
+      {/* Post Title */}
+      <Section
+        style={{
+          backgroundColor: colors.surfaceMuted,
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '16px',
+        }}
+      >
+        <Text
+          style={{
+            ...typography.textSmall,
+            marginTop: '0',
+            marginBottom: '4px',
+            color: colors.textMuted,
+          }}
+        >
+          Feedback
+        </Text>
+        <Text style={{ ...typography.text, marginTop: '0', marginBottom: '0', fontWeight: '600' }}>
+          {postTitle}
+        </Text>
+      </Section>
 
-          {/* Post Title */}
-          <Section
+      {/* Comment Preview - using Row/Column instead of border-left for Outlook compatibility */}
+      <Row style={{ marginBottom: '24px' }}>
+        <Column style={{ width: '3px', backgroundColor: colors.primary, borderRadius: '2px' }} />
+        <Column style={{ paddingLeft: '16px' }}>
+          <Text
             style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: '8px',
-              padding: '16px 20px',
-              marginBottom: '16px',
+              ...typography.text,
+              marginTop: '0',
+              marginBottom: '0',
+              fontStyle: 'italic',
             }}
           >
-            <Text style={{ ...typography.textSmall, margin: '0 0 4px', color: colors.textMuted }}>
-              Feedback
-            </Text>
-            <Text style={{ ...typography.text, margin: 0, fontWeight: '600' }}>{postTitle}</Text>
-          </Section>
-
-          {/* Comment Preview */}
-          <Section
-            style={{
-              borderLeft: `3px solid ${colors.primary}`,
-              paddingLeft: '16px',
-              marginBottom: '24px',
-            }}
-          >
-            <Text style={{ ...typography.text, margin: 0, fontStyle: 'italic' }}>
-              &quot;{commentPreview}&quot;
-            </Text>
-          </Section>
-
-          {/* CTA Button */}
-          <Section style={{ textAlign: 'center', margin: '32px 0' }}>
-            <Button style={button.primary} href={postUrl}>
-              View Comment
-            </Button>
-          </Section>
-
-          {/* Footer */}
-          <Text style={typography.footer}>
-            You received this email because you submitted or subscribed to this feedback.
-            <br />
-            <Link href={unsubscribeUrl} style={{ ...utils.link, fontSize: '13px' }}>
-              Unsubscribe from this post
-            </Link>
+            &quot;{commentPreview}&quot;
           </Text>
-        </Container>
-      </Body>
-    </Html>
+        </Column>
+      </Row>
+
+      {/* CTA Button */}
+      <Section style={{ textAlign: 'center', marginTop: '32px', marginBottom: '32px' }}>
+        <Button style={button.primary} href={postUrl}>
+          View Comment
+        </Button>
+      </Section>
+
+      {/* Footer */}
+      <NotificationFooter
+        reason="You received this email because you submitted or subscribed to this feedback."
+        unsubscribeUrl={unsubscribeUrl}
+      />
+    </EmailLayout>
   )
 }

@@ -37,7 +37,6 @@ export const layout = {
   },
   container: {
     backgroundColor: colors.surface,
-    margin: '0 auto',
     padding: '48px 32px',
     maxWidth: '560px',
     borderRadius: '12px',
@@ -49,34 +48,39 @@ export const typography = {
   h1: {
     color: colors.heading,
     fontSize: '24px',
-    fontWeight: '700',
+    fontWeight: '700' as const,
     lineHeight: '32px',
-    margin: '0 0 8px',
+    marginTop: '0',
+    marginBottom: '8px',
   },
   h2: {
     color: colors.heading,
     fontSize: '20px',
-    fontWeight: '600',
+    fontWeight: '600' as const,
     lineHeight: '28px',
-    margin: '0 0 8px',
+    marginTop: '0',
+    marginBottom: '8px',
   },
   text: {
     color: colors.text,
     fontSize: '16px',
     lineHeight: '26px',
-    margin: '0 0 24px',
+    marginTop: '0',
+    marginBottom: '24px',
   },
   textSmall: {
     color: colors.textMuted,
     fontSize: '14px',
     lineHeight: '22px',
-    margin: '0 0 16px',
+    marginTop: '0',
+    marginBottom: '16px',
   },
   footer: {
     color: colors.textLight,
     fontSize: '13px',
     lineHeight: '20px',
-    margin: '32px 0 0',
+    marginTop: '32px',
+    marginBottom: '0',
     textAlign: 'center' as const,
   },
 }
@@ -99,7 +103,8 @@ export const button = {
 export const utils = {
   divider: {
     borderTop: `1px solid ${colors.border}`,
-    margin: '32px 0',
+    marginTop: '32px',
+    marginBottom: '32px',
   },
   link: {
     color: '#b45309',
@@ -115,10 +120,11 @@ export const utils = {
   code: {
     color: colors.heading,
     fontSize: '32px',
-    fontWeight: '700',
+    fontWeight: '700' as const,
     letterSpacing: '0.2em',
     fontFamily: 'monospace',
-    margin: '0',
+    marginTop: '0',
+    marginBottom: '0',
   },
 }
 
@@ -126,19 +132,18 @@ export const utils = {
 export const branding = {
   logoContainer: {
     textAlign: 'center' as const,
-    marginBottom: '32px',
+    paddingBottom: '32px',
   },
   logo: {
-    width: '48px',
-    height: '48px',
-    margin: '0 auto',
-    display: 'block',
+    width: 48,
+    height: 48,
   },
   appName: {
     color: colors.heading,
     fontSize: '18px',
     fontWeight: '700',
-    margin: '12px 0 0',
+    marginTop: '12px',
+    marginBottom: '0',
     textAlign: 'center' as const,
   },
 }

@@ -1,25 +1,6 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from '@react-email/components'
-import {
-  layout,
-  typography,
-  button,
-  utils,
-  branding,
-  colors,
-  DEFAULT_LOGO_URL,
-} from './shared-styles'
+import { Button, Heading, Section, Text } from '@react-email/components'
+import { EmailLayout, NotificationFooter } from './email-layout'
+import { typography, button, colors } from './shared-styles'
 
 interface FeedbackLinkedEmailProps {
   recipientName?: string
@@ -46,52 +27,44 @@ export function FeedbackLinkedEmail({
     : ` Your feedback has been linked to a post on ${workspaceName}.`
 
   return (
-    <Html>
-      <Head />
-      <Preview>Your feedback has been linked to "{postTitle}"</Preview>
-      <Body style={layout.main}>
-        <Container style={layout.container}>
-          {/* Logo */}
-          <Section style={branding.logoContainer}>
-            <Img src={logoUrl ?? DEFAULT_LOGO_URL} alt={workspaceName} style={branding.logo} />
-          </Section>
+    <EmailLayout
+      preview={`Your feedback has been linked to "${postTitle}"`}
+      logoUrl={logoUrl}
+      logoAlt={workspaceName}
+    >
+      {/* Content */}
+      <Heading style={typography.h1}>Your feedback is being tracked!</Heading>
+      <Text style={typography.text}>
+        {greeting}
+        {attribution} You'll receive updates when the status changes or new comments are posted.
+      </Text>
 
-          {/* Content */}
-          <Heading style={typography.h1}>Your feedback is being tracked!</Heading>
-          <Text style={typography.text}>
-            {greeting}
-            {attribution} You'll receive updates when the status changes or new comments are posted.
-          </Text>
+      {/* Post Title */}
+      <Section
+        style={{
+          backgroundColor: colors.surfaceMuted,
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+        }}
+      >
+        <Text style={{ ...typography.text, marginTop: '0', marginBottom: '0', fontWeight: '600' }}>
+          {postTitle}
+        </Text>
+      </Section>
 
-          {/* Post Title */}
-          <Section
-            style={{
-              backgroundColor: colors.surfaceMuted,
-              borderRadius: '8px',
-              padding: '16px 20px',
-              marginBottom: '24px',
-            }}
-          >
-            <Text style={{ ...typography.text, margin: 0, fontWeight: '600' }}>{postTitle}</Text>
-          </Section>
+      {/* CTA Button */}
+      <Section style={{ textAlign: 'center', marginTop: '32px', marginBottom: '32px' }}>
+        <Button style={button.primary} href={postUrl}>
+          View Feedback
+        </Button>
+      </Section>
 
-          {/* CTA Button */}
-          <Section style={{ textAlign: 'center', margin: '32px 0' }}>
-            <Button style={button.primary} href={postUrl}>
-              View Feedback
-            </Button>
-          </Section>
-
-          {/* Footer */}
-          <Text style={typography.footer}>
-            You received this email because your feedback was attributed to this post.
-            <br />
-            <Link href={unsubscribeUrl} style={{ ...utils.link, fontSize: '13px' }}>
-              Unsubscribe from this post
-            </Link>
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      {/* Footer */}
+      <NotificationFooter
+        reason="You received this email because your feedback was attributed to this post."
+        unsubscribeUrl={unsubscribeUrl}
+      />
+    </EmailLayout>
   )
 }

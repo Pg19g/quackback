@@ -1,17 +1,6 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from '@react-email/components'
-import { layout, typography, button, utils, branding, DEFAULT_LOGO_URL } from './shared-styles'
+import { Button, Heading, Link, Section, Text } from '@react-email/components'
+import { EmailLayout, TransactionalFooter } from './email-layout'
+import { typography, button, utils } from './shared-styles'
 
 interface PasswordResetEmailProps {
   resetLink: string
@@ -20,43 +9,32 @@ interface PasswordResetEmailProps {
 
 export function PasswordResetEmail({ resetLink, logoUrl }: PasswordResetEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>Reset your Quackback password</Preview>
-      <Body style={layout.main}>
-        <Container style={layout.container}>
-          {/* Logo */}
-          <Section style={branding.logoContainer}>
-            <Img src={logoUrl ?? DEFAULT_LOGO_URL} alt="Quackback" style={branding.logo} />
-          </Section>
+    <EmailLayout preview="Reset your Quackback password" logoUrl={logoUrl}>
+      {/* Content */}
+      <Heading style={{ ...typography.h1, textAlign: 'center' }}>Reset your password</Heading>
+      <Text style={{ ...typography.text, textAlign: 'center' }}>
+        Click the button below to set a new password. This link expires in 24 hours.
+      </Text>
 
-          {/* Content */}
-          <Heading style={{ ...typography.h1, textAlign: 'center' }}>Reset your password</Heading>
-          <Text style={{ ...typography.text, textAlign: 'center' }}>
-            Click the button below to set a new password. This link expires in 24 hours.
-          </Text>
+      {/* CTA Button */}
+      <Section style={{ textAlign: 'center', marginTop: '32px', marginBottom: '32px' }}>
+        <Button style={button.primary} href={resetLink}>
+          Reset Password
+        </Button>
+      </Section>
 
-          {/* CTA Button */}
-          <Section style={{ textAlign: 'center', margin: '32px 0' }}>
-            <Button style={button.primary} href={resetLink}>
-              Reset Password
-            </Button>
-          </Section>
+      {/* Fallback Link */}
+      <Text style={typography.textSmall}>
+        Or copy and paste this link into your browser:{' '}
+        <Link href={resetLink} style={utils.link}>
+          {resetLink}
+        </Link>
+      </Text>
 
-          {/* Fallback Link */}
-          <Text style={typography.textSmall}>
-            Or copy and paste this link into your browser:{' '}
-            <Link href={resetLink} style={utils.link}>
-              {resetLink}
-            </Link>
-          </Text>
-
-          {/* Footer */}
-          <Text style={typography.footer}>
-            If you didn&apos;t request a password reset, you can safely ignore this email.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      {/* Footer */}
+      <TransactionalFooter>
+        If you didn&apos;t request a password reset, you can safely ignore this email.
+      </TransactionalFooter>
+    </EmailLayout>
   )
 }
