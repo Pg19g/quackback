@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 // In-memory cache for proxied assets (e.g. email logos) to avoid S3 round-trips.
 // Entries expire after 1 hour. Logo images are typically < 50 KB so memory is negligible.
-const proxyCache = new Map<string, { data: Uint8Array; contentType: string; cachedAt: number }>()
+const proxyCache = new Map<string, { data: ArrayBuffer; contentType: string; cachedAt: number }>()
 const PROXY_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
 export const Route = createFileRoute('/api/storage/$')({
@@ -53,7 +53,7 @@ export const Route = createFileRoute('/api/storage/$')({
             }
 
             const { body, contentType } = await getS3Object(key)
-            const data = new Uint8Array(await new Response(body).arrayBuffer())
+            const data = await new Response(body).arrayBuffer()
 
             proxyCache.set(key, { data, contentType, cachedAt: Date.now() })
 
