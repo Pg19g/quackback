@@ -9,6 +9,7 @@ import {
   strengthTier,
   formatBadgeCount,
   stripHtml,
+  slugify,
 } from '../string'
 
 describe('getInitials', () => {
@@ -184,5 +185,41 @@ describe('stripHtml', () => {
 
   it('handles complex HTML', () => {
     expect(stripHtml('<div class="foo"><p>Hello</p><br/><p>World</p></div>')).toBe('HelloWorld')
+  })
+})
+
+describe('slugify', () => {
+  it('slugifies basic Latin text', () => {
+    expect(slugify('Feature Requests')).toBe('feature-requests')
+  })
+
+  it('handles Cyrillic text', () => {
+    expect(slugify('Кириллица')).toBe('kirillica')
+  })
+
+  it('handles mixed Latin and Cyrillic', () => {
+    const result = slugify('Board Кириллица')
+    expect(result).toContain('board')
+    expect(result.length).toBeGreaterThan('board-'.length)
+  })
+
+  it('handles special characters', () => {
+    expect(slugify('Feature & Requests!')).toBe('feature-and-requests')
+  })
+
+  it('trims leading and trailing hyphens', () => {
+    expect(slugify('  hello world  ')).toBe('hello-world')
+  })
+
+  it('returns empty string for empty input', () => {
+    expect(slugify('')).toBe('')
+  })
+
+  it('handles German umlauts', () => {
+    expect(slugify('Über uns')).toBe('uber-uns')
+  })
+
+  it('collapses multiple hyphens', () => {
+    expect(slugify('a---b')).toBe('a-b')
   })
 })

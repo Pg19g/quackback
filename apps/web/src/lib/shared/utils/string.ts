@@ -2,6 +2,8 @@
  * String utilities
  */
 
+import slugifyLib from 'slugify'
+
 /**
  * Compute initials from a name string.
  * Returns the first letter of each word, uppercased, limited to 2 characters.
@@ -77,14 +79,10 @@ export function stripMarkdownPreview(text: string, maxLength = 150): string {
 
 /**
  * Generate a URL-friendly slug from text.
- * Lowercases, replaces non-alphanumeric runs with hyphens, trims leading/trailing hyphens.
+ * Handles non-Latin scripts (Cyrillic, German umlauts, etc.) via transliteration.
  */
 export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+  return slugifyLib(text, { lower: true, strict: true })
 }
 
 export function stripHtml(html: string): string {
