@@ -59,9 +59,27 @@ export function WidgetShell({
   ).length
   const showTabBar = enabledCount > 1
   const { user, closeWidget } = useWidgetAuth()
-  const showCloseButton =
+  const isNative =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('source') === 'native'
+  const showCloseExplicit =
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('showClose') === '1'
+  // The widget runs in a ~400px iframe on desktop, so we can't use
+  // window.innerWidth to detect mobile. Instead the parent SDK sends
+  // a 'quackback:mobile' postMessage when the viewport crosses 640px.
+  // Native SDK context always shows the close button.
+  const [parentIsMobile, setParentIsMobile] = useState(false)
+  useEffect(() => {
+    function handleMobileMsg(event: MessageEvent) {
+      if (event.data?.type === 'quackback:mobile') {
+        setParentIsMobile(!!event.data.data)
+      }
+    }
+    window.addEventListener('message', handleMobileMsg)
+    return () => window.removeEventListener('message', handleMobileMsg)
+  }, [])
+  const showCloseButton = showCloseExplicit || isNative || parentIsMobile
 
   // Global Escape key handler — close widget from anywhere
   useEffect(() => {
