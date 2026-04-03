@@ -2,11 +2,12 @@
 /**
  * Quackback Data Import CLI
  *
- * Import data from various sources into Quackback.
+ * Import data from various sources into Quackback via the REST API.
  *
  * Usage:
- *   bun scripts/import/cli.ts intermediate --posts posts.csv --board features
- *   bun scripts/import/cli.ts uservoice --suggestions export.csv --board features
+ *   bun scripts/import/cli.ts canny --api-key KEY --quackback-url URL --quackback-key KEY
+ *   bun scripts/import/cli.ts uservoice --suggestions export.csv --quackback-url URL --quackback-key KEY
+ *   bun scripts/import/cli.ts intermediate --posts posts.csv --quackback-url URL --quackback-key KEY
  *
  * Run with --help for full options.
  */
@@ -19,22 +20,16 @@ import { resolve } from 'path'
 config({ path: resolve(__dirname, '../../.env'), override: false })
 
 import { parseCSV } from './core/csv-parser'
-import { runImport } from './core/importer'
+import { runApiImport } from './core/api-importer'
 import {
   intermediatePostSchema,
   intermediateCommentSchema,
   intermediateVoteSchema,
   intermediateNoteSchema,
 } from './schema/validators'
-import type {
-  IntermediateData,
-  IntermediatePost,
-  IntermediateComment,
-  ImportOptions,
-} from './schema/types'
+import type { IntermediateData, IntermediatePost, IntermediateComment } from './schema/types'
 import { convertUserVoice, printStats as printUserVoiceStats } from './adapters/uservoice'
 import { convertCanny, printStats as printCannyStats } from './adapters/canny'
-import { runApiImport } from './adapters/canny/api-importer'
 
 // CLI argument parsing
 interface CliArgs {
@@ -43,23 +38,17 @@ interface CliArgs {
   board?: string
   dryRun: boolean
   verbose: boolean
-  createBoards: boolean
-  createStatuses: boolean
-  createTags: boolean
-  createUsers: boolean
-  batchSize: number
-  skipVoteReconciliation: boolean
   // Intermediate format files
   posts?: string
   comments?: string
   votes?: string
   notes?: string
   // UserVoice files
-  suggestions?: string // Full export (denormalized)
-  users?: string // Subdomain users export
+  suggestions?: string
+  users?: string
   // Canny options
   apiKey?: string
-  // Quackback API options (for API-to-API mode)
+  // Quackback API options (required for all modes)
   quackbackUrl?: string
   quackbackKey?: string
 }
@@ -68,78 +57,77 @@ function printUsage(): void {
   console.log(`
 Quackback Data Import CLI
 
+All imports use the Quackback REST API — no direct database access needed.
+
 Usage:
   bun scripts/import/cli.ts <command> [options]
 
 Commands:
-  intermediate    Import from intermediate CSV format
-  uservoice       Import from UserVoice export files
   canny           Import from Canny via API
+  uservoice       Import from UserVoice export files
+  intermediate    Import from intermediate CSV format
   help            Show this help message
 
-Common Options:
-  --board <slug>      Target board slug (required unless --create-boards)
-  --create-boards     Auto-create boards from post data (categories)
-  --dry-run           Validate only, don't insert data
-  --verbose           Show detailed progress
-  --create-tags       Auto-create missing tags (default: true)
-  --no-create-tags    Don't create missing tags
-  --create-users      Create members for unknown emails
-  --batch-size <n>    Batch size for inserts (default: 100)
+Required Options (all commands):
+  --quackback-url <url>   Quackback instance URL (or set QUACKBACK_URL env var)
+  --quackback-key <key>   Quackback admin API key (or set QUACKBACK_API_KEY env var)
 
-Intermediate Format Options:
-  --posts <file>      Posts CSV file
-  --comments <file>   Comments CSV file
-  --votes <file>      Votes CSV file
-  --notes <file>      Internal notes CSV file
+Common Options:
+  --dry-run           Validate and show summary, don't insert data
+  --verbose           Show detailed progress
+
+Canny Options:
+  --api-key <key>         Canny API key (or set CANNY_API_KEY env var)
 
 UserVoice Options:
   --suggestions <file>    Full suggestions export CSV (denormalized, required)
   --comments <file>       Comments CSV (optional)
   --notes <file>          Internal notes CSV (optional)
-  --users <file>          Subdomain users CSV (optional, requires --create-users)
+  --users <file>          Subdomain users CSV (optional)
+
+Intermediate Format Options:
+  --board <slug>        Target board slug
+  --posts <file>        Posts CSV file
+  --comments <file>     Comments CSV file
+  --votes <file>        Votes CSV file
+  --notes <file>        Internal notes CSV file
 
 Examples:
-  # Import from intermediate format
-  bun scripts/import/cli.ts intermediate \\
-    --posts data/posts.csv \\
-    --comments data/comments.csv \\
-    --board features
+  # Import from Canny
+  bun scripts/import/cli.ts canny \\
+    --api-key YOUR_CANNY_API_KEY \\
+    --quackback-url https://feedback.yourapp.com \\
+    --quackback-key qb_xxx \\
+    --verbose
 
-  # Import from UserVoice with dry run
+  # Import from UserVoice
   bun scripts/import/cli.ts uservoice \\
     --suggestions ~/Downloads/suggestions-full.csv \\
     --comments ~/Downloads/comments.csv \\
     --notes ~/Downloads/notes.csv \\
-    --create-users --dry-run --verbose
-
-  # Import with verbose output
-  bun scripts/import/cli.ts intermediate \\
-    --posts data/posts.csv \\
-    --board features \\
-    --verbose
-
-  # Import from Canny API (direct DB)
-  bun scripts/import/cli.ts canny \\
-    --api-key YOUR_CANNY_API_KEY \\
-    --dry-run --verbose
-
-  # Import from Canny via Quackback API (no DB needed)
-  bun scripts/import/cli.ts canny \\
-    --api-key YOUR_CANNY_API_KEY \\
-    --quackback-url https://app.quackback.io \\
+    --quackback-url https://feedback.yourapp.com \\
     --quackback-key qb_xxx \\
     --verbose
 
-Canny Options:
-  --api-key <key>         Canny API key (or set CANNY_API_KEY env var)
-  --quackback-url <url>   Quackback API URL (enables API-to-API mode, no DB needed)
-  --quackback-key <key>   Quackback admin API key (or set QUACKBACK_API_KEY env var)
+  # Import from intermediate CSV format
+  bun scripts/import/cli.ts intermediate \\
+    --posts data/posts.csv \\
+    --comments data/comments.csv \\
+    --board features \\
+    --quackback-url https://feedback.yourapp.com \\
+    --quackback-key qb_xxx
 
-Environment:
-  DATABASE_URL        PostgreSQL connection string (required unless using API mode)
-  CANNY_API_KEY       Canny API key (alternative to --api-key flag)
-  QUACKBACK_API_KEY   Quackback API key (alternative to --quackback-key flag)
+  # Dry run (validate without importing)
+  bun scripts/import/cli.ts canny \\
+    --api-key YOUR_CANNY_API_KEY \\
+    --quackback-url https://feedback.yourapp.com \\
+    --quackback-key qb_xxx \\
+    --dry-run --verbose
+
+Environment Variables:
+  QUACKBACK_URL         Quackback instance URL (alternative to --quackback-url)
+  QUACKBACK_API_KEY     Quackback admin API key (alternative to --quackback-key)
+  CANNY_API_KEY         Canny API key (alternative to --api-key)
 `)
 }
 
@@ -148,12 +136,6 @@ function parseArgs(args: string[]): CliArgs {
     command: 'help',
     dryRun: false,
     verbose: false,
-    createBoards: false,
-    createStatuses: false,
-    createTags: true,
-    createUsers: false,
-    batchSize: 100,
-    skipVoteReconciliation: false,
   }
 
   if (args.length === 0) {
@@ -198,21 +180,6 @@ function parseArgs(args: string[]): CliArgs {
       case '-v':
         result.verbose = true
         break
-      case '--create-boards':
-        result.createBoards = true
-        break
-      case '--create-tags':
-        result.createTags = true
-        break
-      case '--no-create-tags':
-        result.createTags = false
-        break
-      case '--create-users':
-        result.createUsers = true
-        break
-      case '--batch-size':
-        result.batchSize = parseInt(getNextArg(i++, '--batch-size'), 10) || 100
-        break
       case '--posts':
         result.posts = getNextArg(i++, '--posts')
         break
@@ -254,6 +221,22 @@ function parseArgs(args: string[]): CliArgs {
   return result
 }
 
+function resolveQuackbackConfig(args: CliArgs): { url: string; key: string } {
+  const url = args.quackbackUrl ?? process.env.QUACKBACK_URL
+  const key = args.quackbackKey ?? process.env.QUACKBACK_API_KEY
+
+  if (!url) {
+    console.error('Error: --quackback-url is required (or set QUACKBACK_URL env var)')
+    process.exit(1)
+  }
+  if (!key) {
+    console.error('Error: --quackback-key is required (or set QUACKBACK_API_KEY env var)')
+    process.exit(1)
+  }
+
+  return { url, key }
+}
+
 function validateFile(
   path: string | undefined,
   name: string,
@@ -277,10 +260,7 @@ function validateFile(
 }
 
 async function runIntermediateImport(args: CliArgs): Promise<void> {
-  if (!args.board) {
-    console.error('Error: --board is required')
-    process.exit(1)
-  }
+  const { url, key } = resolveQuackbackConfig(args)
 
   const postsFile = validateFile(args.posts, 'posts', false)
   const commentsFile = validateFile(args.comments, 'comments', false)
@@ -340,17 +320,19 @@ async function runIntermediateImport(args: CliArgs): Promise<void> {
   data.votes = parseFile(votesFile, 'votes', intermediateVoteSchema)
   data.notes = parseFile(notesFile, 'notes', intermediateNoteSchema)
 
-  await executeImport(data, args)
+  // If a board was specified, set it on all posts that don't have one
+  if (args.board) {
+    for (const post of data.posts) {
+      if (!post.board) post.board = args.board
+    }
+  }
+
+  await executeImport(data, url, key, args)
 }
 
 async function runUserVoiceImport(args: CliArgs): Promise<void> {
-  // UserVoice imports always use boards and statuses from source data
-  args.createBoards = true
-  args.createStatuses = true
-  // Trust source vote counts (votersCount from export) instead of recounting
-  args.skipVoteReconciliation = true
+  const { url, key } = resolveQuackbackConfig(args)
 
-  // Validate required files
   const suggestionsFile = validateFile(args.suggestions, 'suggestions', true)!
   const commentsFile = validateFile(args.comments, 'comments', false)
   const notesFile = validateFile(args.notes, 'notes', false)
@@ -370,7 +352,7 @@ async function runUserVoiceImport(args: CliArgs): Promise<void> {
     printUserVoiceStats(result.stats)
   }
 
-  await executeImport(result.data, args)
+  await executeImport(result.data, url, key, args)
 }
 
 async function runCannyImport(args: CliArgs): Promise<void> {
@@ -380,51 +362,7 @@ async function runCannyImport(args: CliArgs): Promise<void> {
     process.exit(1)
   }
 
-  // Check if API-to-API mode
-  const quackbackUrl = args.quackbackUrl
-  const quackbackKey = args.quackbackKey ?? process.env.QUACKBACK_API_KEY
-
-  if (quackbackUrl) {
-    if (!quackbackKey) {
-      console.error(
-        'Error: --quackback-key is required when using --quackback-url (or set QUACKBACK_API_KEY env var)'
-      )
-      process.exit(1)
-    }
-
-    console.log('🔄 Running Canny import via Quackback API...')
-    console.log(`   Quackback URL: ${quackbackUrl}`)
-
-    try {
-      const result = await runApiImport({
-        cannyApiKey: apiKey,
-        quackbackUrl,
-        quackbackKey,
-        dryRun: args.dryRun,
-        verbose: args.verbose,
-      })
-
-      const totalErrors =
-        result.posts.errors +
-        result.comments.errors +
-        result.votes.errors +
-        result.notes.errors +
-        result.changelogs.errors
-
-      if (totalErrors > 0) {
-        process.exit(1)
-      }
-    } catch (error) {
-      console.error('\n❌ Import failed:', error instanceof Error ? error.message : String(error))
-      process.exit(1)
-    }
-    return
-  }
-
-  // Direct DB mode
-  args.createBoards = true
-  args.createStatuses = true
-  args.createUsers = true
+  const { url, key } = resolveQuackbackConfig(args)
 
   console.log('🔄 Fetching data from Canny API...')
 
@@ -443,36 +381,30 @@ async function runCannyImport(args: CliArgs): Promise<void> {
       `${result.stats.changelogs} changelog entries`
   )
 
-  await executeImport(result.data, args)
+  await executeImport(result.data, url, key, args)
 }
 
-async function executeImport(data: IntermediateData, args: CliArgs): Promise<void> {
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
-    console.error('Error: DATABASE_URL environment variable is required')
-    process.exit(1)
-  }
-
-  const options: ImportOptions = {
-    board: args.board,
-    createBoards: args.createBoards,
-    createStatuses: args.createStatuses,
-    createTags: args.createTags,
-    createUsers: args.createUsers,
-    dryRun: args.dryRun,
-    verbose: args.verbose,
-    batchSize: args.batchSize,
-    skipVoteReconciliation: args.skipVoteReconciliation,
-  }
-
+async function executeImport(
+  data: IntermediateData,
+  quackbackUrl: string,
+  quackbackKey: string,
+  args: CliArgs
+): Promise<void> {
   if (args.dryRun) {
     console.log('\n⚠️  DRY RUN MODE - No data will be inserted\n')
   }
 
-  try {
-    const result = await runImport(connectionString, data, options)
+  console.log(`\n🚀 Importing via Quackback API: ${quackbackUrl}`)
 
-    // Exit with error code if there were errors
+  try {
+    const result = await runApiImport({
+      quackbackUrl,
+      quackbackKey,
+      data,
+      dryRun: args.dryRun,
+      verbose: args.verbose,
+    })
+
     const totalErrors =
       result.posts.errors +
       result.comments.errors +

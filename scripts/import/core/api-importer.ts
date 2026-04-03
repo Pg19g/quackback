@@ -1,23 +1,21 @@
 /**
- * API-based Canny importer
+ * API-based importer
  *
- * Imports Canny data into Quackback purely via the REST API,
- * requiring only a Canny API key and a Quackback API key.
- * No database access needed.
+ * Imports IntermediateData into Quackback purely via the REST API.
+ * No database access needed — requires only a Quackback URL and API key.
  */
 
 import { QuackbackClient } from './quackback-client'
-import { convertCanny, printStats } from './adapter'
-import type { IntermediateData, ImportResult, ImportError } from '../../schema/types'
-import { Progress } from '../../core/progress'
+import type { IntermediateData, ImportResult, ImportError } from '../schema/types'
+import { Progress } from './progress'
 
 export interface ApiImportOptions {
-  /** Canny API key */
-  cannyApiKey: string
   /** Quackback API base URL (e.g., https://app.quackback.io) */
   quackbackUrl: string
   /** Quackback admin API key */
   quackbackKey: string
+  /** Pre-converted intermediate data to import */
+  data: IntermediateData
   /** Validate only, don't insert */
   dryRun?: boolean
   /** Verbose output */
@@ -25,16 +23,16 @@ export interface ApiImportOptions {
 }
 
 interface IdMap {
-  /** External Canny ID → Quackback post ID */
+  /** External source ID → Quackback post ID */
   posts: Map<string, string>
-  /** External Canny comment ID → Quackback comment ID */
+  /** External source comment ID → Quackback comment ID */
   comments: Map<string, string>
   /** Email → Quackback principal ID */
   users: Map<string, string>
 }
 
 /**
- * Run a full Canny → Quackback import via API
+ * Run a full import via the Quackback REST API
  */
 export async function runApiImport(options: ApiImportOptions): Promise<ImportResult> {
   const progress = new Progress(options.verbose ?? false)
@@ -51,18 +49,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     errors: [],
   }
 
-  // Step 1: Fetch from Canny
-  progress.start('Fetching data from Canny API')
-  const cannyResult = await convertCanny({
-    apiKey: options.cannyApiKey,
-    verbose: options.verbose,
-  })
-
-  if (options.verbose) {
-    printStats(cannyResult.stats)
-  }
-
-  const { data } = cannyResult
+  const { data } = options
 
   if (options.dryRun) {
     progress.info('[DRY RUN] Skipping Quackback API calls')
@@ -72,7 +59,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     return result
   }
 
-  // Step 2: Create Quackback client
+  // Create Quackback client
   const qb = new QuackbackClient({
     baseUrl: options.quackbackUrl,
     apiKey: options.quackbackKey,
@@ -85,7 +72,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     users: new Map(),
   }
 
-  // Step 3: Identify users
+  // Step 1: Identify users
   if (data.users.length > 0) {
     progress.start(`Identifying ${data.users.length} users`)
     let identified = 0
@@ -106,7 +93,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     progress.success(`${identified} users identified`)
   }
 
-  // Step 4: Resolve boards and statuses (fetch existing from API)
+  // Step 2: Resolve boards and statuses (fetch existing from API)
   progress.start('Resolving boards and statuses')
   const existingBoards = await qb.listAll<{ id: string; slug: string; name: string }>(
     '/api/v1/boards'
@@ -136,7 +123,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     `Boards: ${existingBoards.length}, Statuses: ${existingStatuses.length}, Tags: ${existingTags.length}`
   )
 
-  // Step 5: Import posts
+  // Step 3: Import posts
   if (data.posts.length > 0) {
     progress.start(`Importing ${data.posts.length} posts`)
 
@@ -202,7 +189,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     )
   }
 
-  // Step 6: Import comments (root comments first, then replies)
+  // Step 4: Import comments (root comments first, then replies)
   if (data.comments.length > 0) {
     progress.start(`Importing ${data.comments.length} comments`)
 
@@ -274,7 +261,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     )
   }
 
-  // Step 7: Import votes
+  // Step 5: Import votes
   if (data.votes.length > 0) {
     progress.start(`Importing ${data.votes.length} votes`)
 
@@ -330,7 +317,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     )
   }
 
-  // Step 8: Import notes as private comments
+  // Step 6: Import notes as private comments
   if (data.notes.length > 0) {
     progress.start(`Importing ${data.notes.length} notes as private comments`)
 
@@ -364,7 +351,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     )
   }
 
-  // Step 9: Merge posts
+  // Step 7: Merge posts
   const mergedPosts = data.posts.filter((p) => p.mergedIntoId)
   if (mergedPosts.length > 0) {
     progress.start(`Merging ${mergedPosts.length} posts`)
@@ -389,7 +376,7 @@ export async function runApiImport(options: ApiImportOptions): Promise<ImportRes
     progress.success(`${mergeCount} posts merged`)
   }
 
-  // Step 10: Import changelog entries
+  // Step 8: Import changelog entries
   if (data.changelogs.length > 0) {
     progress.start(`Importing ${data.changelogs.length} changelog entries`)
 

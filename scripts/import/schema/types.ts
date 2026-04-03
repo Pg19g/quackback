@@ -2,7 +2,7 @@
  * Intermediate format types for data import
  *
  * These types represent the standardized format that all source adapters
- * must convert to before the core importer processes them.
+ * must convert to before the API importer processes them.
  */
 
 /**
