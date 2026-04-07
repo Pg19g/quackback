@@ -16,6 +16,7 @@ const createCommentSchema = z.object({
   parentId: z.string().optional().nullable(),
   isPrivate: z.boolean().optional(),
   createdAt: z.string().datetime().optional(),
+  onBehalfOfPrincipalId: z.string().optional(),
 })
 
 export const Route = createFileRoute('/api/v1/posts/$postId/comments')({
@@ -105,8 +106,13 @@ export const Route = createFileRoute('/api/v1/posts/$postId/comments')({
           const { createComment } = await import('@/lib/server/domains/comments/comment.service')
           const { db, principal, eq } = await import('@/lib/server/db')
 
+          // Support creating comments on behalf of another user
+          const effectivePrincipalId = parsed.data.onBehalfOfPrincipalId
+            ? (parsed.data.onBehalfOfPrincipalId as typeof principalId)
+            : principalId
+
           const principalRecord = await db.query.principal.findFirst({
-            where: eq(principal.id, principalId),
+            where: eq(principal.id, effectivePrincipalId),
             columns: { id: true, displayName: true, role: true, type: true },
             with: { user: { columns: { id: true, name: true, email: true } } },
           })
@@ -130,7 +136,7 @@ export const Route = createFileRoute('/api/v1/posts/$postId/comments')({
               createdAt,
             },
             {
-              principalId,
+              principalId: effectivePrincipalId,
               userId: principalRecord.user?.id,
               displayName: principalRecord.displayName ?? undefined,
               name: principalRecord.user?.name,

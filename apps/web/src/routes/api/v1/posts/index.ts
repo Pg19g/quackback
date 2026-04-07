@@ -22,6 +22,7 @@ const createPostSchema = z.object({
   statusId: z.string().optional(),
   tagIds: z.array(z.string()).optional(),
   createdAt: z.string().datetime().optional(),
+  onBehalfOfPrincipalId: z.string().optional(),
 })
 
 export const Route = createFileRoute('/api/v1/posts/')({
@@ -160,8 +161,13 @@ export const Route = createFileRoute('/api/v1/posts/')({
           const { createPost } = await import('@/lib/server/domains/posts/post.service')
           const { db, principal, eq } = await import('@/lib/server/db')
 
+          // Support creating posts on behalf of another user
+          const effectivePrincipalId = parsed.data.onBehalfOfPrincipalId
+            ? (parsed.data.onBehalfOfPrincipalId as typeof principalId)
+            : principalId
+
           const principalRecord = await db.query.principal.findFirst({
-            where: eq(principal.id, principalId),
+            where: eq(principal.id, effectivePrincipalId),
             columns: { id: true, displayName: true, type: true },
             with: { user: { columns: { id: true, name: true, email: true } } },
           })
@@ -186,7 +192,7 @@ export const Route = createFileRoute('/api/v1/posts/')({
               createdAt,
             },
             {
-              principalId,
+              principalId: effectivePrincipalId,
               userId: principalRecord.user?.id,
               displayName: principalRecord.displayName ?? undefined,
               name: principalRecord.user?.name,
